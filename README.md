@@ -29,7 +29,7 @@ A simple RFID-based attendance system built with an Arduino UNO R3. Students tap
 ## Setup
 
 1. Wire the components according to the pin comments at the top of the main sketch.
-2. Upload `Step1_FindCardUID.ino` and use the Serial Monitor to read the UID of each card. Note these down.
+2. Upload `test.ino` and use the Serial Monitor to read the UID of each card. Note these down.
 3. Choose one card to act as the Master Card (a keyfob works well, since it's easy to keep separate from student cards). Set its UID as `MASTER_UID` in `attendance_system.ino`.
 4. If the RTC is showing the wrong time, upload `SetRTCTime.ino` once with the correct date and time, then switch back to the main sketch.
 5. Upload `attendance_system.ino`. This is the sketch that runs the full system.
