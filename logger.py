@@ -1,233 +1,58 @@
 """
 PC-side attendance logger.
 
-Receives from Arduino:
+Listens to the Arduino over USB serial. Each attendance scan arrives as:
+    Name,AdmissionNo,RollNo,UID,Date,Time,Status
+This script appends each line to attendance_log.csv.
 
-Name,AdmissionNo,RollNo,UID,Date,Time
+Setup:
+  pip install pyserial
+  Set PORT below to your Arduino's port (Arduino IDE > Tools > Port)
+  Run: python logger.py
 
-Example:
-
-Hubayl,20240057,12,567FFA03,17/09/2026,16:30:42
-
-Then saves everything to:
-
-attendance_log.csv
+Note: only one program can hold the serial port at a time — close the
+Arduino IDE's Serial Monitor before running this script.
 """
 
 import serial
 import csv
 import os
-import time
 
-
-# ==================================================
-# SETTINGS
-# ==================================================
-
-PORT = "COM11"       # CHANGE THIS if your Arduino uses another port
+PORT = "COM3"
 BAUD = 9600
-
 LOGFILE = "attendance_log.csv"
-
-
-# ==================================================
-# MAIN PROGRAM
-# ==================================================
+HEADER = ["Name", "AdmissionNo", "RollNo", "UID", "Date", "Time", "Status"]
 
 def main():
+    ser = serial.Serial(PORT, BAUD, timeout=1)
+    print(f"Listening on {PORT}... Press Ctrl+C to stop.")
 
-    print("===================================")
-    print(" RFID ATTENDANCE LOGGER")
-    print("===================================")
-    print()
+    file_is_new = not os.path.exists(LOGFILE)
 
-    print(f"Connecting to Arduino on {PORT}...")
-
-    try:
-        ser = serial.Serial(
-            PORT,
-            BAUD,
-            timeout=1
-        )
-
-    except serial.SerialException as e:
-
-        print()
-        print("ERROR: Could not connect to Arduino.")
-        print()
-        print("Possible reasons:")
-        print("1. Wrong COM port")
-        print("2. Arduino Serial Monitor is open")
-        print("3. Another program is using the COM port")
-        print("4. Arduino is disconnected")
-        print()
-        print("Arduino error:")
-        print(e)
-
-        return
-
-
-    # Arduino resets when serial connection opens.
-    # Give it a couple seconds to restart.
-    time.sleep(2)
-
-
-    print()
-    print(f"Connected successfully to {PORT}")
-    print("Waiting for attendance scans...")
-    print("Press Ctrl+C to stop.")
-    print()
-
-
-    # ==================================================
-    # CREATE CSV FILE IF IT DOES NOT EXIST
-    # ==================================================
-
-    file_exists = os.path.isfile(LOGFILE)
-
-
-    with open(
-        LOGFILE,
-        "a",
-        newline="",
-        encoding="utf-8"
-    ) as f:
-
+    with open(LOGFILE, "a", newline="") as f:
         writer = csv.writer(f)
 
-
-        # Add header only when creating a new file
-        if not file_exists or os.path.getsize(LOGFILE) == 0:
-
-            writer.writerow([
-                "Name",
-                "Admission No",
-                "Roll No",
-                "UID",
-                "Date",
-                "Time"
-            ])
-
+        if file_is_new:
+            writer.writerow(HEADER)
             f.flush()
 
-
-        # ==================================================
-        # LISTEN FOR ARDUINO DATA
-        # ==================================================
-
         while True:
-
             try:
+                line = ser.readline().decode("utf-8", errors="ignore").strip()
 
-                line = ser.readline().decode(
-                    "utf-8",
-                    errors="ignore"
-                ).strip()
-
-
-                # Ignore empty lines
-                if not line:
-                    continue
-
-
-                print(f"Received: {line}")
-
-
-                # ==================================================
-                # IGNORE ARDUINO STARTUP / OTHER SERIAL MESSAGES
-                # ==================================================
-
-                if line.startswith("Name,AdmissionNo"):
-
-                    continue
-
-
-                # ==================================================
-                # SPLIT CSV DATA
-                # ==================================================
-
-                parts = line.split(",")
-
-
-                # We expect exactly 6 fields:
-                #
-                # Name
-                # AdmissionNo
-                # RollNo
-                # UID
-                # Date
-                # Time
-
-                if len(parts) != 6:
-
-                    print(
-                        "Ignored: unexpected data format"
-                    )
-
-                    continue
-
-
-                name = parts[0]
-                admission_no = parts[1]
-                roll_no = parts[2]
-                uid = parts[3]
-                date = parts[4]
-                clock_time = parts[5]
-
-
-                # ==================================================
-                # SAVE TO CSV
-                # ==================================================
-
-                writer.writerow([
-                    name,
-                    admission_no,
-                    roll_no,
-                    uid,
-                    date,
-                    clock_time
-                ])
-
-                f.flush()
-
-
-                # ==================================================
-                # DISPLAY RESULT
-                # ==================================================
-
-                print()
-                print("===================================")
-                print(" ATTENDANCE RECORDED")
-                print("===================================")
-                print(f"Name         : {name}")
-                print(f"Admission No : {admission_no}")
-                print(f"Roll No      : {roll_no}")
-                print(f"RFID UID     : {uid}")
-                print(f"Date         : {date}")
-                print(f"Time         : {clock_time}")
-                print("===================================")
-                print()
-
+                if line and line.count(",") == 6:
+                    row = line.split(",")
+                    writer.writerow(row)
+                    f.flush()
+                    print(f"Logged: {row[0]} ({row[6]}) at {row[4]} {row[5]}")
+                elif line:
+                    print(f"[Arduino] {line}")
 
             except KeyboardInterrupt:
-
-                print()
-                print("Logger stopped.")
-
+                print("\nStopped.")
                 break
-
-
             except Exception as e:
-
                 print("Error:", e)
-
-
-    ser.close()
-
-
-# ==================================================
-# START PROGRAM
-# ==================================================
 
 if __name__ == "__main__":
     main()
