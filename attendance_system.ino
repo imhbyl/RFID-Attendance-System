@@ -8,11 +8,11 @@
     - Users stored in EEPROM (persist across power loss)
     - Late-arrival detection against a configurable cutoff time
     - Duplicate-scan cooldown
-    - CSV output over Serial: Name,AdmissionNo,RollNo,UID,Date,Time,Status
+    - CSV output over Serial: Name,AdmissionNo,RollNo,Class,UID,Date,Time,Status
 
   Master Card usage:
     Tap Master Card -> type A (add) or D (delete) in Serial Monitor ->
-    tap the target card -> for "add", type Name,AdmissionNo,RollNo
+    tap the target card -> for "add", type Name,AdmissionNo,RollNo,Class
 
   Startup:
     Type RESET within 5 seconds of power-on to erase all stored users.
@@ -43,7 +43,7 @@ const int GREEN_LED = A0;
 const int RED_LED   = A1;
 const int BUZZER    = A2;
 
-// ---- Master Card ----
+// ---- Master Card (admin key, found via the UID-finder sketch) ----
 byte MASTER_UID[4] = {0xAE, 0x52, 0x99, 0x04};
 
 // ---- Late cutoff (24-hour format) ----
@@ -56,6 +56,7 @@ struct User {
   char name[13];
   char admissionNo[6];
   char rollNo[3];
+  char className[5];
 };
 
 const int MAX_USERS = 8;
@@ -155,20 +156,21 @@ void enrollNewUser(byte* uid) {
   lcd.setCursor(0, 1);
   lcd.print("Monitor now...");
 
-  Serial.println("Type: Name,AdmissionNo,RollNo   then press Enter");
+  Serial.println("Type: Name,AdmissionNo,RollNo,Class   then press Enter");
 
   while (!Serial.available()) {
     delay(50);
   }
 
-  char inputBuf[32];
+  char inputBuf[36];
   readSerialLine(inputBuf, sizeof(inputBuf));
 
-  char* namePart = strtok(inputBuf, ",");
-  char* admPart  = strtok(NULL, ",");
-  char* rollPart = strtok(NULL, ",");
+  char* namePart  = strtok(inputBuf, ",");
+  char* admPart   = strtok(NULL, ",");
+  char* rollPart  = strtok(NULL, ",");
+  char* classPart = strtok(NULL, ",");
 
-  if (!namePart || !admPart || !rollPart) {
+  if (!namePart || !admPart || !rollPart || !classPart) {
     Serial.println("ERROR: Wrong format. Enrollment cancelled.");
     lcd.clear();
     lcd.print("Enroll Failed");
@@ -184,6 +186,8 @@ void enrollNewUser(byte* uid) {
   u.admissionNo[sizeof(u.admissionNo) - 1] = '\0';
   strncpy(u.rollNo, rollPart, sizeof(u.rollNo) - 1);
   u.rollNo[sizeof(u.rollNo) - 1] = '\0';
+  strncpy(u.className, classPart, sizeof(u.className) - 1);
+  u.className[sizeof(u.className) - 1] = '\0';
 
   users[userCount] = u;
   lastSeen[userCount] = 0;
@@ -221,6 +225,8 @@ void showAttendance(User &user, DateTime now, bool isLate) {
   lcd.setCursor(0, 1);
   lcd.print("Roll:");
   lcd.print(user.rollNo);
+  lcd.print(" ");
+  lcd.print(user.className);
   delay(1200);
 
   lcd.clear();
@@ -481,6 +487,7 @@ void loop() {
       Serial.print(users[matchIndex].name);        Serial.print(",");
       Serial.print(users[matchIndex].admissionNo);  Serial.print(",");
       Serial.print(users[matchIndex].rollNo);       Serial.print(",");
+      Serial.print(users[matchIndex].className);    Serial.print(",");
 
       for (byte i = 0; i < 4; i++) {
         if (mfrc522.uid.uidByte[i] < 0x10) Serial.print("0");
