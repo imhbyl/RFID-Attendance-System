@@ -8,17 +8,18 @@
     - Users stored in EEPROM (persist across power loss)
     - Late-arrival detection against a configurable cutoff time
     - Duplicate-scan cooldown
-    - CSV output over Serial: Name,AdmissionNo,RollNo,Class,UID,Date,Time,Status
+    - CSV output over Serial: Name,AdmissionNo,RollNo,Class,ParentEmail,UID,Date,Time,Status
 
   Master Card usage:
     Tap Master Card -> type A (add) or D (delete) in Serial Monitor ->
-    tap the target card -> for "add", type Name,AdmissionNo,RollNo,Class
+    tap the target card -> for "add", type Name,AdmissionNo,RollNo,Class,ParentEmail
 
   Startup:
-    Type RESET within 5 seconds of power-on to erase all stored users.
+    Type RESET within 10 seconds of power-on to erase all stored users.
 */
 
 #include <SPI.h>
+#include <SoftwareSerial.h>
 #include <MFRC522.h>
 #include <LiquidCrystal.h>
 #include <Wire.h>
@@ -31,6 +32,9 @@
 #define SS_PIN 10
 #define RST_PIN 9
 MFRC522 mfrc522(SS_PIN, RST_PIN);
+
+// ---- Link to ESP32 (D2 = RX, A3 = TX — see wiring notes in the ESP32 sketch) ----
+SoftwareSerial espSerial(2, A3);
 
 // ---- RTC ----
 RTC_DS1307 rtc;
@@ -57,11 +61,14 @@ struct User {
   char admissionNo[6];
   char rollNo[3];
   char className[5];
+  char parentEmail[36];
 };
 
-const int MAX_USERS = 8;
-const int EEPROM_COUNT_ADDR = 0;
-const int EEPROM_USERS_START = 1;
+const int MAX_USERS = 4;
+const byte EEPROM_LAYOUT_VERSION = 4;   // bump this any time the User struct changes
+const int EEPROM_VERSION_ADDR = 0;
+const int EEPROM_COUNT_ADDR = 1;
+const int EEPROM_USERS_START = 2;
 const int USER_RECORD_SIZE = sizeof(User);
 
 User users[MAX_USERS];
@@ -76,6 +83,17 @@ const unsigned long COOLDOWN_MS = 10000;
 // ---------------------------------------------------
 
 void loadUsersFromEEPROM() {
+  byte storedVersion = EEPROM.read(EEPROM_VERSION_ADDR);
+
+  if (storedVersion != EEPROM_LAYOUT_VERSION) {
+    // Data was saved under an old/different format — wipe it instead of
+    // reading it as garbage.
+    userCount = 0;
+    EEPROM.write(EEPROM_VERSION_ADDR, EEPROM_LAYOUT_VERSION);
+    EEPROM.write(EEPROM_COUNT_ADDR, 0);
+    return;
+  }
+
   userCount = EEPROM.read(EEPROM_COUNT_ADDR);
   if (userCount < 0 || userCount > MAX_USERS) userCount = 0;
 
@@ -156,21 +174,22 @@ void enrollNewUser(byte* uid) {
   lcd.setCursor(0, 1);
   lcd.print("Monitor now...");
 
-  Serial.println("Type: Name,AdmissionNo,RollNo,Class   then press Enter");
+  Serial.println("Type: Name,AdmissionNo,RollNo,Class,ParentEmail   then press Enter");
 
   while (!Serial.available()) {
     delay(50);
   }
 
-  char inputBuf[36];
+  char inputBuf[60];
   readSerialLine(inputBuf, sizeof(inputBuf));
 
   char* namePart  = strtok(inputBuf, ",");
   char* admPart   = strtok(NULL, ",");
   char* rollPart  = strtok(NULL, ",");
   char* classPart = strtok(NULL, ",");
+  char* emailPart = strtok(NULL, ",");
 
-  if (!namePart || !admPart || !rollPart || !classPart) {
+  if (!namePart || !admPart || !rollPart || !classPart || !emailPart) {
     Serial.println("ERROR: Wrong format. Enrollment cancelled.");
     lcd.clear();
     lcd.print("Enroll Failed");
@@ -188,6 +207,8 @@ void enrollNewUser(byte* uid) {
   u.rollNo[sizeof(u.rollNo) - 1] = '\0';
   strncpy(u.className, classPart, sizeof(u.className) - 1);
   u.className[sizeof(u.className) - 1] = '\0';
+  strncpy(u.parentEmail, emailPart, sizeof(u.parentEmail) - 1);
+  u.parentEmail[sizeof(u.parentEmail) - 1] = '\0';
 
   users[userCount] = u;
   lastSeen[userCount] = 0;
@@ -196,6 +217,13 @@ void enrollNewUser(byte* uid) {
 
   Serial.print("Enrolled: ");
   Serial.println(u.name);
+  Serial.print("UID saved: ");
+  for (byte i = 0; i < 4; i++) {
+    if (u.uid[i] < 0x10) Serial.print("0");
+    Serial.print(u.uid[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
 
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -248,6 +276,7 @@ void showAttendance(User &user, DateTime now, bool isLate) {
 
 void setup() {
   Serial.begin(9600);
+  espSerial.begin(9600);
 
   SPI.begin();
   mfrc522.PCD_Init();
@@ -285,14 +314,15 @@ void setup() {
   Serial.println(" users from EEPROM.");
 
   // Optional full reset window
-  Serial.println("Type RESET within 5 seconds to erase all stored users.");
+  Serial.println("Type RESET within 10 seconds to erase all stored users.");
   unsigned long resetWindowStart = millis();
-  while (millis() - resetWindowStart < 5000) {
+  while (millis() - resetWindowStart < 10000) {
     if (Serial.available()) {
       char cmdBuf[8];
       readSerialLine(cmdBuf, sizeof(cmdBuf));
       if (strcasecmp(cmdBuf, "RESET") == 0) {
         userCount = 0;
+        EEPROM.write(EEPROM_VERSION_ADDR, EEPROM_LAYOUT_VERSION);
         EEPROM.write(EEPROM_COUNT_ADDR, 0);
         Serial.println("All users erased.");
         lcd.clear();
@@ -447,6 +477,14 @@ void loop() {
   int matchIndex = findUser(mfrc522.uid.uidByte);
 
   if (matchIndex == -1) {
+    Serial.print("UID scanned: ");
+    for (byte i = 0; i < 4; i++) {
+      if (mfrc522.uid.uidByte[i] < 0x10) Serial.print("0");
+      Serial.print(mfrc522.uid.uidByte[i], HEX);
+      Serial.print(" ");
+    }
+    Serial.println();
+
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Not Registered");
@@ -488,6 +526,7 @@ void loop() {
       Serial.print(users[matchIndex].admissionNo);  Serial.print(",");
       Serial.print(users[matchIndex].rollNo);       Serial.print(",");
       Serial.print(users[matchIndex].className);    Serial.print(",");
+      Serial.print(users[matchIndex].parentEmail);  Serial.print(",");
 
       for (byte i = 0; i < 4; i++) {
         if (mfrc522.uid.uidByte[i] < 0x10) Serial.print("0");
@@ -511,6 +550,36 @@ void loop() {
       Serial.print(",");
 
       Serial.println(isLate ? "LATE" : "ON TIME");
+
+      // Same record, sent to the ESP32 for WiFi upload
+      espSerial.print(users[matchIndex].name);        espSerial.print(",");
+      espSerial.print(users[matchIndex].admissionNo);  espSerial.print(",");
+      espSerial.print(users[matchIndex].rollNo);       espSerial.print(",");
+      espSerial.print(users[matchIndex].className);    espSerial.print(",");
+      espSerial.print(users[matchIndex].parentEmail);  espSerial.print(",");
+
+      for (byte i = 0; i < 4; i++) {
+        if (mfrc522.uid.uidByte[i] < 0x10) espSerial.print("0");
+        espSerial.print(mfrc522.uid.uidByte[i], HEX);
+      }
+      espSerial.print(",");
+
+      if (now.day() < 10) espSerial.print("0");
+      espSerial.print(now.day()); espSerial.print("/");
+      if (now.month() < 10) espSerial.print("0");
+      espSerial.print(now.month()); espSerial.print("/");
+      espSerial.print(now.year());
+      espSerial.print(",");
+
+      if (now.hour() < 10) espSerial.print("0");
+      espSerial.print(now.hour()); espSerial.print(":");
+      if (now.minute() < 10) espSerial.print("0");
+      espSerial.print(now.minute()); espSerial.print(":");
+      if (now.second() < 10) espSerial.print("0");
+      espSerial.print(now.second());
+      espSerial.print(",");
+
+      espSerial.println(isLate ? "LATE" : "ON TIME");
 
       digitalWrite(GREEN_LED, LOW);
     }

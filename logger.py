@@ -2,7 +2,7 @@
 PC-side attendance logger + admin console.
 
 Listens to the Arduino over USB serial. Each attendance scan arrives as:
-    Name,AdmissionNo,RollNo,Class,UID,Date,Time,Status
+    Name,AdmissionNo,RollNo,Class,ParentEmail,UID,Date,Time,Status
 This script appends each line to attendance_log.csv.
 
 It also lets you talk BACK to the Arduino from this same window — so when
@@ -26,10 +26,10 @@ import csv
 import os
 import threading
 
-PORT = "COM3"
+PORT = "COM11"
 BAUD = 9600
 LOGFILE = "attendance_log.csv"
-HEADER = ["Name", "AdmissionNo", "RollNo", "Class", "UID", "Date", "Time", "Status"]
+HEADER = ["Name", "AdmissionNo", "RollNo", "Class", "ParentEmail", "UID", "Date", "Time", "Status"]
 
 
 def listen_loop(ser, writer, f):
@@ -38,11 +38,11 @@ def listen_loop(ser, writer, f):
         try:
             line = ser.readline().decode("utf-8", errors="ignore").strip()
 
-            if line and line.count(",") == 7:
+            if line and line.count(",") == 8:
                 row = line.split(",")
                 writer.writerow(row)
                 f.flush()
-                print(f"Logged: {row[0]} ({row[7]}) at {row[5]} {row[6]}")
+                print(f"Logged: {row[0]} ({row[8]}) at {row[6]} {row[7]}")
             elif line:
                 # Prompts, boot messages, "Enrolled: ...", etc. show up here
                 print(f"[Arduino] {line}")
@@ -54,8 +54,15 @@ def listen_loop(ser, writer, f):
 def main():
     ser = serial.Serial(PORT, BAUD, timeout=1)
     print(f"Connected on {PORT}.")
-    print("Whenever the Arduino asks a question (like A/D, or Name,Adm,Roll,Class),")
-    print("just type your answer here and press Enter.")
+    print()
+    print("== Quick reference ==")
+    print("  RESET  -> type this within 10 seconds of connecting to erase ALL stored users")
+    print("  A      -> after tapping the Master Card, add a new student")
+    print("  D      -> after tapping the Master Card, delete a student")
+    print("  When adding, type:  Name,AdmissionNo,RollNo,Class,ParentEmail")
+    print("======================")
+    print()
+    print("Whenever the Arduino asks a question, type your answer here and press Enter.")
     print("Press Ctrl+C to stop.\n")
 
     file_is_new = not os.path.exists(LOGFILE)
