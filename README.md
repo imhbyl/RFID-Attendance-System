@@ -86,12 +86,12 @@ The UNO runs at 5V logic and the ESP32 only tolerates 3.3V, so the connection ca
    then install "esp32" from Boards Manager.
 ### Setup order
  
-1. Upload `Step1_FindCardUID.ino` to the UNO and note the UID of each card, including the one you'll use as the Master Card.
-2. Set `MASTER_UID` in `RFID_Attendance_System.ino` to your Master Card's UID.
+1. Upload `test.ino` to the UNO and note the UID of each card, including the one you'll use as the Master Card.
+2. Set `MASTER_UID` in `attendance_system.ino` to your Master Card's UID.
 3. If the RTC shows the wrong time, upload `SetRTCTime.ino` once with the correct date/time, then switch back.
 4. Set up the Google Sheet and Apps Script (below), then set `WIFI_SSID`, `WIFI_PASSWORD`, and `WEB_APP_URL` in `ESP32_WiFiBridge.ino` and upload it to the ESP32 by itself to confirm it connects.
 5. Wire the UNO and ESP32 together as described above.
-6. Upload `RFID_Attendance_System.ino` to the UNO.
+6. Upload `attendance_system.ino` to the UNO.
 7. Run `logger.py` on a computer connected to the UNO for local CSV backup (optional, since the ESP32 also logs to Google Sheets independently).
 ### Google Sheet + Apps Script
  
@@ -101,7 +101,7 @@ The UNO runs at 5V logic and the ESP32 only tolerates 3.3V, so the connection ca
 4. Any time the script is edited afterward, redeploy with Deploy > Manage Deployments > edit > New version — saving alone doesn't update a live deployment.
 ### Dashboard
  
-`attendance_dashboard.html` can be used two ways:
+`index.html` can be used two ways:
  
 - Opened directly (or via Claude's artifact preview) and loaded manually with a CSV file exported from `logger.py`.
 - Hosted on GitHub Pages, where it can also connect live to the Google Sheet: File > Share > Publish to web in Sheets, choose CSV format, and paste the resulting URL into the dashboard's "Connect" box. It refreshes automatically every 30 seconds. This live-fetch mode only works once hosted outside Claude's own preview, due to browser restrictions in that environment.
@@ -144,11 +144,11 @@ Set the `PORT` variable at the top of the file to match your Arduino's COM port 
  
 | File | Runs on | Purpose |
 |---|---|---|
-| `RFID_Attendance_System.ino` | Arduino UNO | Main attendance logic |
-| `Step1_FindCardUID.ino` | Arduino UNO | One-time use, to find card UIDs |
+| `attendance_system.ino` | Arduino UNO | Main attendance logic |
+| `test.ino` | Arduino UNO | One-time use, to find card UIDs |
 | `SetRTCTime.ino` | Arduino UNO | One-time use, to set the RTC clock |
 | `ESP32_WiFiBridge.ino` | ESP32 | Forwards attendance data to Google Sheets |
 | `GoogleAppsScript.gs` | Google Apps Script | Receives data, logs it, sends email alerts |
 | `logger.py` | Computer | Local CSV backup and Master Card admin console |
-| `attendance_dashboard.html` | Browser | Attendance viewer and analytics dashboard |
+| `index.html` | Browser | Attendance viewer and analytics dashboard |
  
