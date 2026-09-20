@@ -5,11 +5,11 @@
 #include <SD.h>
 
 // ---------- Wi-Fi ----------
-const char* WIFI_SSID = "Wasee";
-const char* WIFI_PASSWORD = "0503200380";
+const char* WIFI_SSID = "YOUR_WIFI_NAME";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
 // ---------- Google Apps Script ----------
-const char* WEB_APP_URL = "https://script.google.com/macros/s/AKfycby44P39FIV6NgFq02QCJqgWlmbk78Bj2jVhOIf0iSKtmDr3WvuSWpWfUW5sGKDSDcIQig/exec";
+const char* WEB_APP_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL";
 
 // ---------- Uno serial connection ----------
 HardwareSerial UnoSerial(2);
