@@ -1,154 +1,162 @@
-# RFID Attendance System
- 
-An RFID-based attendance system built around an Arduino UNO R3, with an ESP32 bridge for WiFi connectivity, Google Sheets as a backend, email alerts for late arrivals, and a web dashboard for viewing attendance data.
- 
-Students tap a card on the reader instead of a manual roll call. The system checks the card against a list of registered users, records the time using an onboard real-time clock, flags whether the student is on time or late, and syncs the record to a Google Sheet over WiFi. If a student arrives late, their parent gets an automatic email.
- 
+# RFID Attendance Monitoring System
+
+An RFID-based attendance system built for EDUEX. Students tap an RFID card, the system records their attendance, identifies late arrivals, updates a live Google Sheet, and can send a late-arrival email alert to the registered parent email.
+
+The system also stores every attendance scan on a microSD card. This provides a local backup if Wi-Fi or the cloud service is unavailable.
+
+## Features
+
+- RFID card-based attendance using an RC522 reader
+- LCD, LEDs, and buzzer feedback for successful or rejected scans
+- Date and time from a DS1307 RTC module
+- Late-arrival detection
+- Master-card enrollment and deletion of student cards
+- Student details saved in Arduino EEPROM
+- Wi-Fi upload to Google Sheets through an ESP32
+- Parent email alerts for late attendance
+- Attendance dashboard with filters and attendance percentage
+- Local microSD-card backup for every scan
+
 ## How it works
- 
+
+```text
+RFID card
+   ↓
+Arduino Uno: reads the card and checks the student
+   ↓
+LCD / LED / buzzer feedback
+   ↓
+ESP32: uploads the attendance record through Wi-Fi
+   ↓                         ↘
+Google Sheets + email alerts  microSD backup
 ```
-RFID card --> RC522 reader --> Arduino UNO --> ESP32 --> Google Sheets
-                                     |                        |
-                              LCD, LEDs, buzzer          Email alerts
-                                     |
-                                logger.py (local CSV backup)
+
+Each attendance record uses this format:
+
+```text
+Name,AdmissionNo,RollNo,Class,ParentEmail,UID,Date,Time,Status
 ```
- 
-The Arduino UNO handles the actual attendance logic: reading cards, checking them against stored users, showing feedback on the LCD, and keeping time. It sends each valid scan over two channels at once — over USB to a connected computer (for local CSV logging), and over a second wired serial connection to the ESP32, which pushes the record to Google Sheets over WiFi and can send email alerts.
- 
-## Hardware
- 
-- Arduino UNO R3
-- RC522 RFID reader module (also sold as "MFRC522" — same hardware)
-- ESP32 dev board
-- RFID cards and one keyfob (used as the admin/Master Card)
-- 16x2 LCD (standard parallel, not I2C)
-- DS1307 RTC module
-- Green and red LEDs
-- Passive buzzer
-- 220Ω resistors (x2 for the LEDs)
-- 10kΩ potentiometer (LCD contrast)
-- 1kΩ and 2kΩ resistors (voltage divider between UNO and ESP32)
-- Breadboard and jumper wires
-## Wiring
- 
-**RC522 → Arduino UNO**
- 
-| RC522 pin | Arduino pin |
+
+The ESP32 saves the record to the SD card before attempting the Google Sheets upload. The card contains:
+
+- `attendance_backup.csv` — every scan made by the system
+- `sync_status.csv` — whether the cloud upload was `SYNCED` or remained pending because Wi-Fi was unavailable
+
+> Current version: the SD card is a reliable local backup and records cloud status. Automatic uploading of previously pending SD records after Wi-Fi returns is a planned improvement.
+
+## Hardware used
+
+| Part | Purpose |
 |---|---|
-| RST | D9 |
-| SDA | D10 |
-| MOSI | D11 |
-| MISO | D12 |
-| SCK | D13 |
-| 3.3V | 3.3V |
-| GND | GND |
- 
-The RC522 must be powered from 3.3V, not 5V — connecting it to 5V will damage the module.
- 
-**LCD (parallel) → Arduino UNO**
- 
-| LCD pin | Arduino pin |
-|---|---|
-| RS | D8 |
-| E | D7 |
-| D4 | D6 |
-| D5 | D5 |
-| D6 | D4 |
-| D7 | D3 |
-| RW, VSS | GND |
-| VDD | 5V |
-| VO | Wiper of the 10kΩ potentiometer (other two legs to 5V and GND) |
- 
-**LEDs and buzzer**
- 
-| Component | Arduino pin |
-|---|---|
-| Green LED (through 220Ω) | A0 |
-| Red LED (through 220Ω) | A1 |
-| Buzzer | A2 |
- 
-**Arduino UNO ↔ ESP32**
- 
-The UNO runs at 5V logic and the ESP32 only tolerates 3.3V, so the connection carrying data from the UNO to the ESP32 needs a voltage divider.
- 
-- UNO A3 → 1kΩ resistor → junction → ESP32 RX2 (GPIO16)
-- That same junction → 2kΩ resistor → GND
-- ESP32 TX2 (GPIO17) → UNO D2 (no divider needed this direction)
-- UNO GND → ESP32 GND (shared ground, required)
+| Arduino Uno R3 | Main attendance controller |
+| ESP32 DevKit V1 | Wi-Fi and Google Sheets connection |
+| RC522 RFID reader and RFID cards | Student identification |
+| LCD1602 parallel display | Displays student and attendance information |
+| DS1307 RTC module | Keeps date and time |
+| LEDs and passive buzzer | Visual and audio feedback |
+| 10k potentiometer | LCD contrast control |
+| Resistors | LED protection and Uno-to-ESP32 voltage divider |
+| microSD card module and 2 GB card | Local attendance backup |
+| Breadboard and jumper wires | Circuit connections |
+
+## Important wiring
+
+### Arduino Uno to ESP32
+
+The Uno uses 5V logic while the ESP32 uses 3.3V logic. A voltage divider is required on the Uno-to-ESP32 signal.
+
+```text
+Uno A3 ── 1kΩ resistor ──+── ESP32 GPIO16 / RX2
+                         |
+                       2kΩ resistor
+                         |
+                        GND
+
+ESP32 GPIO17 / TX2 ───────── Uno D2
+ESP32 GND ─────────────────── Uno GND
+```
+
+Do not connect Uno 5V directly to an ESP32 GPIO pin.
+
 ## Software setup
- 
-### Arduino IDE
- 
-1. Install the `MFRC522` library and the `RTClib` library (Library Manager).
-2. Install ESP32 board support: File > Preferences > Additional Board Manager URLs, add:
-   `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`
-   then install "esp32" from Boards Manager.
-### Setup order
- 
-1. Upload `test.ino` to the UNO and note the UID of each card, including the one you'll use as the Master Card.
-2. Set `MASTER_UID` in `attendance_system.ino` to your Master Card's UID.
-3. If the RTC shows the wrong time, upload `SetRTCTime.ino` once with the correct date/time, then switch back.
-4. Set up the Google Sheet and Apps Script (below), then set `WIFI_SSID`, `WIFI_PASSWORD`, and `WEB_APP_URL` in `ESP32_WiFiBridge.ino` and upload it to the ESP32 by itself to confirm it connects.
-5. Wire the UNO and ESP32 together as described above.
-6. Upload `attendance_system.ino` to the UNO.
-7. Run `logger.py` on a computer connected to the UNO for local CSV backup (optional, since the ESP32 also logs to Google Sheets independently).
-### Google Sheet + Apps Script
- 
-1. Create a Google Sheet with a header row: `Name, AdmissionNo, RollNo, Class, Email, Date, Time, Status, EmailResult`
-2. Open Extensions > Apps Script, paste in `GoogleAppsScript.gs`, and set `FALLBACK_EMAIL` to your own address.
-3. Deploy > New Deployment > Web app. Set "Execute as" to yourself and "Who has access" to "Anyone". Copy the resulting URL into `WEB_APP_URL` in the ESP32 sketch.
-4. Any time the script is edited afterward, redeploy with Deploy > Manage Deployments > edit > New version — saving alone doesn't update a live deployment.
-### Dashboard
- 
-`index.html` can be used two ways:
- 
-- Opened directly (or via Claude's artifact preview) and loaded manually with a CSV file exported from `logger.py`.
-- Hosted on GitHub Pages, where it can also connect live to the Google Sheet: File > Share > Publish to web in Sheets, choose CSV format, and paste the resulting URL into the dashboard's "Connect" box. It refreshes automatically every 30 seconds. This live-fetch mode only works once hosted outside Claude's own preview, due to browser restrictions in that environment.
-## Using the Master Card
- 
-Tap the Master Card (the keyfob), then in the Serial Monitor (or `logger.py`, which can also send commands) type `A` to add a student or `D` to delete one, then tap the target card.
- 
-When adding, enter details in this format:
- 
+
+### Arduino Uno sketch
+
+Upload the Uno attendance sketch first. It handles RFID reading, student storage, RTC time, display messages, LEDs, buzzer feedback, and sending attendance lines to the ESP32.
+
+### ESP32 sketch
+
+Before uploading the ESP32 Wi-Fi bridge sketch:
+
+1. Enter your Wi-Fi name and password.
+2. Enter your deployed Google Apps Script Web App URL.
+3. Insert a FAT32-formatted SD card.
+4. Select the correct ESP32 board and port in Arduino IDE.
+5. Open Serial Monitor at `115200` baud after upload.
+
+Expected successful output:
+
+```text
+SD card ready.
+Received from Uno: ...
+Saved to SD card.
+Cloud result: SYNCED
 ```
-Name,AdmissionNo,RollNo,Class,ParentEmail
+
+For an offline test, temporarily comment out `startWiFi();` in the ESP32 `setup()` function. A scan should show:
+
+```text
+Saved to SD card.
+Cloud result: PENDING_OFFLINE
 ```
- 
-Example:
- 
+
+Power off the ESP32 before removing the SD card. Open `attendance_backup.csv` on a computer to confirm the saved records.
+
+## Arduino IDE installations
+
+Install the ESP32 board package through **Tools → Board → Boards Manager**:
+
+```text
+esp32 by Espressif Systems
 ```
-John Smith,12345,07,9A,parent@example.com
+
+Install these libraries through **Sketch → Include Library → Manage Libraries**:
+
+```text
+MFRC522 by GithubCommunity / Miguel Balboa
+RTClib by Adafruit
 ```
- 
-This is saved to EEPROM immediately and survives a power cycle.
- 
-## logger.py
- 
-Run this on a computer connected to the Arduino via USB. It logs every attendance record to `attendance_log.csv` and also lets you type Master Card commands directly into the same terminal window — no need to have the Arduino IDE's Serial Monitor open at all once this is running.
- 
+
+These are normally included with Arduino IDE or the ESP32 board package:
+
+```text
+LiquidCrystal
+EEPROM
+SoftwareSerial
+SPI
+SD
+WiFi
+HTTPClient
+HardwareSerial
 ```
-pip install pyserial
-python logger.py
-```
- 
-Set the `PORT` variable at the top of the file to match your Arduino's COM port first.
- 
-## Notes
- 
-- The Arduino UNO has only 2KB of RAM, so name, admission number, roll number, class, and email fields all have fixed, limited lengths to stay within memory. If the struct ever changes size, `EEPROM_LAYOUT_VERSION` in the sketch needs to be incremented — the code detects a mismatch automatically and clears old, incompatible data rather than reading it as garbage.
-- If the RFID reader stops responding, unplugging and reconnecting the Arduino usually resolves it. This is a known quirk of the RC522 module under repeated rapid reads.
-- Only one program can access the Arduino's serial port at a time — close the Serial Monitor before running `logger.py`, and vice versa.
-- Google Apps Script Web Apps sometimes respond with HTTP 200 even when the script fails internally. The dashboard writes any email-sending failure directly into the sheet's `EmailResult` column, so failures are visible without checking the Apps Script execution log.
-## Files
- 
-| File | Runs on | Purpose |
-|---|---|---|
-| `attendance_system.ino` | Arduino UNO | Main attendance logic |
-| `test.ino` | Arduino UNO | One-time use, to find card UIDs |
-| `SetRTCTime.ino` | Arduino UNO | One-time use, to set the RTC clock |
-| `ESP32_WiFiBridge.ino` | ESP32 | Forwards attendance data to Google Sheets |
-| `GoogleAppsScript.gs` | Google Apps Script | Receives data, logs it, sends email alerts |
-| `logger.py` | Computer | Local CSV backup and Master Card admin console |
-| `index.html` | Browser | Attendance viewer and analytics dashboard |
- 
+
+## Demonstration flow
+
+1. Power the Uno and ESP32.
+2. Wait for the ESP32 to connect to Wi-Fi.
+3. Tap a registered RFID card.
+4. Show the LCD feedback and LED/buzzer response.
+5. Show the new row in Google Sheets and the dashboard.
+6. Show `attendance_backup.csv` on the SD card as the offline safety feature.
+
+## Future improvements
+
+- Automatically re-upload pending SD records when Wi-Fi returns
+- Add a more compact enclosure and labelled wiring
+- Add a secure administrator page for student management
+- Add a camera-based second check with appropriate consent and privacy controls
+- Add analytics for absent students and class attendance trends
+
+## Safety and privacy
+
+Keep Wi-Fi passwords, Google Apps Script URLs, and student/parent data out of public GitHub repositories. Use test data during demonstrations whenever possible.
