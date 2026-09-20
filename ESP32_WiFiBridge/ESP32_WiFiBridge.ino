@@ -1,136 +1,216 @@
-/*
-  ESP32 — WiFi Bridge for Attendance System
-  -------------------------------------------
-  Receives a CSV line from the UNO over a wired serial connection,
-  then sends it to your Google Apps Script Web App over WiFi.
-
-  UNO sends:  Name,AdmissionNo,RollNo,Class,UID,Date,Time,Status
-
-  Wiring between UNO and ESP32 (IMPORTANT — read this):
-    UNO is 5V logic, ESP32 GPIO is 3.3V ONLY. Connecting UNO's TX
-    pin directly to ESP32's RX pin can damage the ESP32.
-
-    UNO TX (A3) --[1k resistor]--+--> ESP32 RX (GPIO16)
-                                  |
-                              [2k resistor]
-                                  |
-                                 GND
-    (This is a simple voltage divider — it drops 5V down to a safe ~3.3V)
-
-    ESP32 TX (GPIO17) --------------> UNO RX (D2)   (no divider needed this way)
-    ESP32 GND ------------------------> UNO GND      (must share a common ground)
-*/
-
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <HardwareSerial.h>
+#include <SPI.h>
+#include <SD.h>
 
-// ---- WiFi credentials ----
-const char* WIFI_SSID = "Wasee";       // <-- CHANGE THIS
-const char* WIFI_PASSWORD = "0503200380"; // <-- CHANGE THIS
+// ---------- Wi-Fi ----------
+const char* WIFI_SSID = "Wasee";
+const char* WIFI_PASSWORD = "0503200380";
 
-// ---- Your Google Apps Script Web App URL ----
-const char* WEB_APP_URL = "https://script.google.com/macros/s/AKfycby44P39FIV6NgFq02QCJqgWlmbk78Bj2jVhOIf0iSKtmDr3WvuSWpWfUW5sGKDSDcIQig/exec"; // <-- CHANGE THIS
+// ---------- Google Apps Script ----------
+const char* WEB_APP_URL = "https://script.google.com/macros/s/AKfycby44P39FIV6NgFq02QCJqgWlmbk78Bj2jVhOIf0iSKtmDr3WvuSWpWfUW5sGKDSDcIQig/exec";
 
-// ---- Serial link to the UNO ----
-HardwareSerial UnoSerial(2); // uses ESP32's UART2
-#define UNO_RX_PIN 16
-#define UNO_TX_PIN 17
+// ---------- Uno serial connection ----------
+HardwareSerial UnoSerial(2);
+
+#define UNO_RX_PIN 16   // ESP32 receives Uno data here
+#define UNO_TX_PIN 17   // ESP32 sends data to Uno here
+
+// ---------- SD card ----------
+#define SD_CS_PIN 5
+
+bool sdReady = false;
+unsigned long lastWiFiAttempt = 0;
+const unsigned long WIFI_RETRY_MS = 10000;
 
 void setup() {
-  Serial.begin(115200); // for debugging, view this in Serial Monitor
+  Serial.begin(115200);
+
+  // Connection from Uno: Uno A3 -> ESP32 GPIO16
   UnoSerial.begin(9600, SERIAL_8N1, UNO_RX_PIN, UNO_TX_PIN);
 
-  connectToWiFi();
-}
-
-void connectToWiFi() {
-  Serial.print("Connecting to WiFi");
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println();
-  Serial.print("Connected! IP address: ");
-  Serial.println(WiFi.localIP());
+  setupSDCard();
+  startWiFi();
 }
 
 void loop() {
+  // Receive attendance records from Uno
   if (UnoSerial.available()) {
     String line = UnoSerial.readStringUntil('\n');
     line.trim();
 
     if (line.length() > 0) {
-      Serial.print("Received from UNO: ");
+      Serial.print("Received from Uno: ");
       Serial.println(line);
-      sendToGoogleSheet(line);
+
+      // Save every scan to the SD card first
+      saveAttendanceBackup(line);
+
+      // Then try to upload it to Google Sheets
+      String result = sendToGoogleSheet(line);
+      saveSyncStatus(line, result);
+
+      Serial.print("Cloud result: ");
+      Serial.println(result);
     }
   }
 
-  // Reconnect WiFi automatically if it drops
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi dropped — reconnecting...");
-    connectToWiFi();
+  // Keep trying Wi-Fi without stopping RFID attendance scanning
+  if (WiFi.status() != WL_CONNECTED &&
+      millis() - lastWiFiAttempt >= WIFI_RETRY_MS) {
+    startWiFi();
   }
 }
 
-void sendToGoogleSheet(String csvLine) {
-  // Expected format: Name,AdmissionNo,RollNo,Class,ParentEmail,UID,Date,Time,Status
-  String parts[9];
-  int partCount = 0;
-  int lastPos = 0;
-  for (int i = 0; i <= csvLine.length(); i++) {
-    if (i == csvLine.length() || csvLine[i] == ',') {
-      parts[partCount++] = csvLine.substring(lastPos, i);
-      lastPos = i + 1;
-    }
-  }
+void setupSDCard() {
+  Serial.println("Starting SD card...");
 
-  if (partCount != 9) {
-    Serial.println("Skipped — unexpected format.");
+  if (!SD.begin(SD_CS_PIN)) {
+    Serial.println("SD card not detected.");
     return;
   }
 
-  String name   = parts[0];
-  String adm    = parts[1];
-  String roll   = parts[2];
-  String cls    = parts[3];
-  String email  = parts[4];
-  // parts[5] is UID — not sent to the sheet, but could be added if needed
-  String date   = parts[6];
-  String time   = parts[7];
-  String status = parts[8];
+  sdReady = true;
+  Serial.println("SD card ready.");
+
+  addHeaderIfEmpty(
+    "/attendance_backup.csv",
+    "Name,AdmissionNo,RollNo,Class,ParentEmail,UID,Date,Time,Status"
+  );
+
+  addHeaderIfEmpty(
+    "/sync_status.csv",
+    "Date,Time,Name,AdmissionNo,CloudStatus"
+  );
+}
+
+void addHeaderIfEmpty(const char* path, const char* header) {
+  File file = SD.open(path, FILE_APPEND);
+
+  if (!file) {
+    Serial.println("Could not open SD file.");
+    return;
+  }
+
+  if (file.size() == 0) {
+    file.println(header);
+  }
+
+  file.close();
+}
+
+void saveAttendanceBackup(String csvLine) {
+  if (!sdReady) return;
+
+  File file = SD.open("/attendance_backup.csv", FILE_APPEND);
+
+  if (!file) {
+    Serial.println("Could not save SD backup.");
+    return;
+  }
+
+  file.println(csvLine);
+  file.close();
+
+  Serial.println("Saved to SD card.");
+}
+
+void saveSyncStatus(String csvLine, String result) {
+  if (!sdReady) return;
+
+  String parts[9];
+  int partCount = splitCSV(csvLine, parts, 9);
+
+  if (partCount != 9) return;
+
+  File file = SD.open("/sync_status.csv", FILE_APPEND);
+
+  if (!file) {
+    Serial.println("Could not save cloud status.");
+    return;
+  }
+
+  file.println(
+    parts[6] + "," + parts[7] + "," +
+    parts[0] + "," + parts[1] + "," + result
+  );
+
+  file.close();
+}
+
+void startWiFi() {
+  lastWiFiAttempt = millis();
+
+  if (WiFi.status() == WL_CONNECTED) return;
+
+  Serial.println("Connecting to Wi-Fi...");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+}
+
+String sendToGoogleSheet(String csvLine) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return "PENDING_OFFLINE";
+  }
+
+  // Expected:
+  // Name,AdmissionNo,RollNo,Class,ParentEmail,UID,Date,Time,Status
+  String parts[9];
+  int partCount = splitCSV(csvLine, parts, 9);
+
+  if (partCount != 9) {
+    return "INVALID_RECORD";
+  }
 
   String url = String(WEB_APP_URL) +
-               "?name=" + urlEncode(name) +
-               "&adm=" + urlEncode(adm) +
-               "&roll=" + urlEncode(roll) +
-               "&class=" + urlEncode(cls) +
-               "&email=" + urlEncode(email) +
-               "&date=" + urlEncode(date) +
-               "&time=" + urlEncode(time) +
-               "&status=" + urlEncode(status);
+    "?name=" + urlEncode(parts[0]) +
+    "&adm=" + urlEncode(parts[1]) +
+    "&roll=" + urlEncode(parts[2]) +
+    "&class=" + urlEncode(parts[3]) +
+    "&email=" + urlEncode(parts[4]) +
+    "&date=" + urlEncode(parts[6]) +
+    "&time=" + urlEncode(parts[7]) +
+    "&status=" + urlEncode(parts[8]);
 
   HTTPClient http;
   http.begin(url);
   http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+
   int httpCode = http.GET();
-
-  Serial.print("Upload result: ");
-  Serial.println(httpCode);
-
   http.end();
+
+  if (httpCode == 200) {
+    return "SYNCED";
+  }
+
+  return "PENDING_HTTP_" + String(httpCode);
+}
+
+int splitCSV(String csvLine, String parts[], int maxParts) {
+  int partCount = 0;
+  int lastPos = 0;
+
+  for (int i = 0; i <= csvLine.length(); i++) {
+    if (i == csvLine.length() || csvLine[i] == ',') {
+      if (partCount < maxParts) {
+        parts[partCount] = csvLine.substring(lastPos, i);
+      }
+
+      partCount++;
+      lastPos = i + 1;
+    }
+  }
+
+  return partCount;
 }
 
 String urlEncode(String str) {
   String encoded = "";
-  char c;
   char code[4];
+
   for (int i = 0; i < str.length(); i++) {
-    c = str.charAt(i);
+    char c = str.charAt(i);
+
     if (isalnum(c)) {
       encoded += c;
     } else {
@@ -138,5 +218,6 @@ String urlEncode(String str) {
       encoded += code;
     }
   }
+
   return encoded;
 }
