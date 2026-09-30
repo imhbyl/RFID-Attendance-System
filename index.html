@@ -747,26 +747,23 @@ footer {
      GOOGLE SHEETS
 ========================= -->
 
-<div class="panel">
+ <div class="panel" id="liveFetchPanel">
+   <h2>Live from Google Sheets</h2>
 
-  <h2>Live from Google Sheets</h2>
+   <div class="table-controls">
+     <button class="file-btn" onclick="openGoogleSheet()">
+      Open Google Sheets
+     </button>
 
-  <div class="live-controls">
+     <button class="file-btn" onclick="connectGoogleSheet()">
+      Connect Live Data
+     </button>
+   </div>
 
-    <input
-      type="text"
-      id="sheetUrlInput"
-      placeholder="Paste Google Sheets CSV URL..."
-    >
-
-    <button
-      class="file-btn"
-      id="connectBtn"
-    >
-      Connect
-    </button>
-
-  </div>
+   <span class="file-status" id="liveStatus">
+    Your attendance data is stored in Google Sheets.
+   </span>
+ </div>
 
   <p
     class="file-status"
@@ -1021,6 +1018,28 @@ let allRows = [];
 let chart = null;
 
 let refreshTimer = null;
+
+// Your Google Sheets link
+const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTX9LMNRjxqay0vN7uL1z24HGm-a1FSCzomrCo_L4HVzjGfjKgnQ3pGwMMyPovfDhkX6MpKuVR61cag/pub?output=csv";
+
+// Open the Google Sheet
+function openGoogleSheet() {
+  window.open(GOOGLE_SHEET_URL, "_blank");
+}
+
+// Connect the website to the Google Sheet
+function connectGoogleSheet() {
+  document.getElementById("sheetUrlInput").value = GOOGLE_SHEET_URL;
+  fetchLiveData(GOOGLE_SHEET_URL);
+
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+  }
+
+  refreshTimer = setInterval(() => {
+    fetchLiveData(GOOGLE_SHEET_URL);
+  }, 30000);
+}
 
 
 /* =========================
