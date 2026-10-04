@@ -849,1135 +849,1104 @@
 
   <script>
 
-    /* =========================
-       VARIABLES
-    ========================= */
+let allRows = [];
+let chart = null;
+let refreshTimer = null;
 
-    let allRows = [];
-    let chart = null;
-    let refreshTimer = null;
-
-
-    /* =========================
-       GOOGLE SHEETS SETTINGS
-    ========================= */
-
-    /*
-      This is your published Google Sheets CSV link.
-
-      Because this is already a published CSV link,
-      we can use it directly.
-    */
-
-    const GOOGLE_SHEET_URL =
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vTX9LMNRjxqay0vN7uL1z24HGm-a1FSCzomrCo_L4HVzjGfjKgnQ3pGwMMyPovfDhkX6MpKuVR61cag/pub?output=csv";
+const GOOGLE_SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTX9LMNRjxqay0vN7uL1z24HGm-a1FSCzomrCo_L4HVzjGfjKgnQ3pGwMMyPovfDhkX6MpKuVR61cag/pub?output=csv";
 
 
-    /* =========================
-       OPEN GOOGLE SHEETS
-    ========================= */
+/* =====================================================
+   OPEN GOOGLE SHEET
+===================================================== */
 
-    document
-      .getElementById("openSheetBtn")
-      .addEventListener("click", function () {
+document
+  .getElementById("openSheetBtn")
+  .addEventListener("click", function () {
 
-        window.open(
-          GOOGLE_SHEET_URL,
-          "_blank"
-        );
+    window.open(
+      GOOGLE_SHEET_URL,
+      "_blank"
+    );
 
-      });
-
-
-    /* =========================
-       CONNECT LIVE DATA
-    ========================= */
-
-    document
-      .getElementById("connectBtn")
-      .addEventListener("click", function () {
-
-        const status =
-          document.getElementById("liveStatus");
-
-        status.innerHTML =
-          "Connecting to Google Sheets...";
-
-        /*
-          Stop previous refresh timer
-        */
-
-        if (refreshTimer) {
-          clearInterval(refreshTimer);
-        }
-
-        /*
-          Fetch immediately
-        */
-
-        fetchLiveData();
+  });
 
 
-        /*
-          Refresh every 30 seconds
-        */
+/* =====================================================
+   LIVE CONNECTION
+===================================================== */
 
-        refreshTimer =
-          setInterval(function () {
+document
+  .getElementById("connectBtn")
+  .addEventListener("click", function () {
 
-            fetchLiveData();
-
-          }, 30000);
-
-      });
-
-
-    /* =========================
-       FETCH GOOGLE SHEETS DATA
-    ========================= */
-
-    function fetchLiveData() {
-
-      const status =
-        document.getElementById("liveStatus");
-
-      status.textContent =
-        "Fetching attendance data...";
-
-
-      /*
-        Add timestamp to prevent the browser
-        from showing an old cached CSV.
-      */
-
-      const csvURL =
-        GOOGLE_SHEET_URL +
-        "&cache=" +
-        Date.now();
-
-
-      fetch(csvURL)
-
-        .then(function (response) {
-
-          if (!response.ok) {
-            throw new Error(
-              "HTTP " + response.status
-            );
-          }
-
-          return response.text();
-
-        })
-
-        .then(function (csv) {
-
-          const result =
-            Papa.parse(csv, {
-              header: true,
-              skipEmptyLines: true
-            });
-
-
-          /*
-            Keep valid attendance records
-          */
-
-          allRows =
-            result.data.filter(function (row) {
-
-              return (
-                row.Name &&
-                row.Date
-              );
-
-            });
-
-
-          /*
-            Show connection status
-          */
-
-          status.innerHTML =
-            '<span class="live-dot"></span>' +
-            "Live • Updated " +
-            new Date().toLocaleTimeString() +
-            " • " +
-            allRows.length +
-            " records";
-
-
-          document
-            .getElementById("lastLoadedStamp")
-            .textContent =
-            "Live Sync";
-
-
-          /*
-            Display dashboard
-          */
-
-          showDashboard();
-
-        })
-
-        .catch(function (error) {
-
-          console.error(
-            "Google Sheets error:",
-            error
-          );
-
-
-          status.textContent =
-            "Could not connect to Google Sheets: " +
-            error.message;
-
-        });
-
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
     }
 
+    fetchLiveData();
 
-    /* =========================
-       CSV BUTTON
-    ========================= */
+    refreshTimer =
+      setInterval(
+        fetchLiveData,
+        30000
+      );
 
-    document
-      .getElementById("loadBtn")
-      .onclick = function () {
-
-        document
-          .getElementById("fileInput")
-          .click();
-
-      };
+  });
 
 
-    /* =========================
-       CSV FILE
-    ========================= */
+/* =====================================================
+   FETCH LIVE DATA
+===================================================== */
+
+function fetchLiveData() {
+
+  const status =
+    document.getElementById(
+      "liveStatus"
+    );
+
+  status.textContent =
+    "Fetching attendance data...";
+
+
+  const url =
+    GOOGLE_SHEET_URL +
+    "&cache=" +
+    Date.now();
+
+
+  fetch(url)
+
+    .then(function(response) {
+
+      if (!response.ok) {
+
+        throw new Error(
+          "HTTP " +
+          response.status
+        );
+
+      }
+
+      return response.text();
+
+    })
+
+    .then(function(csv) {
+
+      const result =
+        Papa.parse(
+          csv,
+          {
+            header: true,
+            skipEmptyLines: true
+          }
+        );
+
+
+      allRows =
+        result.data.filter(
+          function(row) {
+
+            return (
+              row.Name &&
+              row.Date
+            );
+
+          }
+        );
+
+
+      status.innerHTML =
+        '<span class="live-dot"></span>' +
+        "Live • Updated " +
+        new Date()
+          .toLocaleTimeString() +
+        " • " +
+        allRows.length +
+        " records";
+
+
+      document
+        .getElementById(
+          "lastLoadedStamp"
+        )
+        .textContent =
+        "Live Sync";
+
+
+      showDashboard();
+
+    })
+
+    .catch(function(error) {
+
+      console.error(error);
+
+      status.textContent =
+        "Connection failed: " +
+        error.message;
+
+    });
+
+}
+
+
+/* =====================================================
+   CSV LOAD
+===================================================== */
+
+document
+  .getElementById("loadBtn")
+  .onclick = function() {
 
     document
       .getElementById("fileInput")
-      .onchange = function (event) {
+      .click();
 
-        const file =
-          event.target.files[0];
-
-        if (!file) return;
+  };
 
 
-        Papa.parse(file, {
+document
+  .getElementById("fileInput")
+  .onchange = function(event) {
 
-          header: true,
+    const file =
+      event.target.files[0];
 
-          skipEmptyLines: true,
+    if (!file) return;
 
-          complete: function (result) {
 
-            allRows =
-              result.data.filter(function (row) {
+    Papa.parse(
+      file,
+      {
+
+        header: true,
+
+        skipEmptyLines: true,
+
+        complete: function(result) {
+
+          allRows =
+            result.data.filter(
+              function(row) {
 
                 return (
                   row.Name &&
                   row.Date
                 );
 
-              });
+              }
+            );
 
 
-            document
-              .getElementById("fileStatus")
-              .textContent =
-              file.name +
-              " • " +
-              allRows.length +
-              " records";
+          document
+            .getElementById(
+              "fileStatus"
+            )
+            .textContent =
+            file.name +
+            " • " +
+            allRows.length +
+            " records";
 
 
-            document
-              .getElementById("lastLoadedStamp")
-              .textContent =
-              "Loaded " +
-              new Date().toLocaleTimeString();
+          document
+            .getElementById(
+              "lastLoadedStamp"
+            )
+            .textContent =
+            "Loaded " +
+            new Date()
+              .toLocaleTimeString();
 
 
-            showDashboard();
+          showDashboard();
 
-          }
-
-        });
-
-      };
-
-
-    /* =========================
-       SHOW DASHBOARD
-    ========================= */
-
-    function showDashboard() {
-
-      if (allRows.length === 0) {
-
-        document
-          .getElementById("dashboard")
-          .style.display = "none";
-
-        document
-          .getElementById("emptyState")
-          .style.display = "block";
-
-        return;
+        }
 
       }
+    );
+
+  };
 
 
-      document
-        .getElementById("emptyState")
-        .style.display = "none";
+/* =====================================================
+   SHOW DASHBOARD
+===================================================== */
+
+function showDashboard() {
+
+  const empty =
+    document.getElementById(
+      "emptyState"
+    );
+
+  const dashboard =
+    document.getElementById(
+      "dashboard"
+    );
 
 
-      document
-        .getElementById("dashboard")
-        .style.display = "block";
+  if (!allRows.length) {
+
+    dashboard.style.display =
+      "none";
+
+    empty.style.display =
+      "block";
+
+    return;
+  }
 
 
-      updateFilters();
+  empty.style.display =
+    "none";
+
+  dashboard.style.display =
+    "block";
+
+
+  updateFilters();
+  renderStats();
+  renderChart();
+  renderRecords();
+  renderPercentages();
+}
+
+
+/* =====================================================
+   FILTERS
+===================================================== */
+
+function updateFilters() {
+
+  const dateSelect =
+    document.getElementById(
+      "dateFilter"
+    );
+
+  const classSelect =
+    document.getElementById(
+      "classFilter"
+    );
+
+
+  const oldDate =
+    dateSelect.value;
+
+  const oldClass =
+    classSelect.value;
+
+
+  const dates =
+    [...new Set(
+      allRows
+        .map(r => r.Date)
+        .filter(Boolean)
+    )].sort();
+
+
+  const classes =
+    [...new Set(
+      allRows
+        .map(r => r.Class)
+        .filter(Boolean)
+    )].sort();
+
+
+  dateSelect.innerHTML =
+    '<option value="">All Dates</option>';
+
+
+  dates.forEach(function(date) {
+
+    const option =
+      document.createElement(
+        "option"
+      );
+
+    option.value =
+      date;
+
+    option.textContent =
+      date;
+
+    dateSelect.appendChild(
+      option
+    );
+
+  });
+
+
+  classSelect.innerHTML =
+    '<option value="">All Classes</option>';
+
+
+  classes.forEach(function(cls) {
+
+    const option =
+      document.createElement(
+        "option"
+      );
+
+    option.value =
+      cls;
+
+    option.textContent =
+      cls;
+
+    classSelect.appendChild(
+      option
+    );
+
+  });
+
+
+  if (
+    dates.includes(oldDate)
+  ) {
+
+    dateSelect.value =
+      oldDate;
+
+  }
+
+
+  if (
+    classes.includes(oldClass)
+  ) {
+
+    classSelect.value =
+      oldClass;
+
+  }
+
+}
+
+
+/* =====================================================
+   FILTERED ROWS
+===================================================== */
+
+function getFilteredRows() {
+
+  const date =
+    document.getElementById(
+      "dateFilter"
+    ).value;
+
+
+  const cls =
+    document.getElementById(
+      "classFilter"
+    ).value;
+
+
+  const name =
+    document.getElementById(
+      "nameFilter"
+    ).value
+    .toLowerCase();
+
+
+  const roll =
+    document.getElementById(
+      "rollFilter"
+    ).value
+    .toLowerCase();
+
+
+  const adm =
+    document.getElementById(
+      "admFilter"
+    ).value
+    .toLowerCase();
+
+
+  return allRows.filter(
+    function(row) {
+
+      return (
+
+        (!date ||
+          row.Date === date)
+
+        &&
+
+        (!cls ||
+          row.Class === cls)
+
+        &&
+
+        (!name ||
+          (row.Name || "")
+            .toLowerCase()
+            .includes(name))
+
+        &&
+
+        (!roll ||
+          (row.RollNo || "")
+            .toLowerCase()
+            .includes(roll))
+
+        &&
+
+        (!adm ||
+          (row.AdmissionNo || "")
+            .toLowerCase()
+            .includes(adm))
+
+      );
+
+    }
+  );
+
+}
+
+
+/* =====================================================
+   FILTER EVENTS
+===================================================== */
+
+[
+  "dateFilter",
+  "classFilter",
+  "nameFilter",
+  "rollFilter",
+  "admFilter"
+].forEach(function(id) {
+
+  const element =
+    document.getElementById(id);
+
+  element.addEventListener(
+    id.includes("Filter") &&
+    (
+      id === "nameFilter" ||
+      id === "rollFilter" ||
+      id === "admFilter"
+    )
+      ? "input"
+      : "change",
+
+    function() {
 
       renderStats();
-
       renderChart();
-
       renderRecords();
-
       renderPercentages();
 
     }
+  );
+
+});
 
 
-    /* =========================
-       FILTER OPTIONS
-    ========================= */
+/* =====================================================
+   STATS
+===================================================== */
 
-    function updateFilters() {
+function renderStats() {
 
-      const dateSelect =
-        document.getElementById("dateFilter");
-
-      const classSelect =
-        document.getElementById("classFilter");
+  const rows =
+    getFilteredRows();
 
 
-      const currentDate =
-        dateSelect.value;
-
-      const currentClass =
-        classSelect.value;
+  let onTime = 0;
+  let late = 0;
 
 
-      const dates =
-        [
-          ...new Set(
-            allRows.map(function (row) {
-              return row.Date;
-            })
-          )
-        ]
-          .filter(Boolean)
-          .sort();
+  rows.forEach(function(row) {
+
+    const status =
+      (row.Status || "")
+        .trim()
+        .toUpperCase();
 
 
-      const classes =
-        [
-          ...new Set(
-            allRows.map(function (row) {
-              return row.Class;
-            })
-          )
-        ]
-          .filter(Boolean)
-          .sort();
+    if (status === "ON TIME") {
+      onTime++;
+    }
+
+    if (status === "LATE") {
+      late++;
+    }
+
+  });
 
 
-      dateSelect.innerHTML =
-        '<option value="">All Dates</option>';
+  const students =
+    new Set(
+      rows.map(
+        row => row.AdmissionNo
+      )
+    ).size;
 
 
-      dates.forEach(function (date) {
-
-        const option =
-          document.createElement("option");
-
-        option.value = date;
-        option.textContent = date;
-
-        dateSelect.appendChild(option);
-
-      });
+  animateNumber(
+    "totalScans",
+    rows.length
+  );
 
 
-      classSelect.innerHTML =
-        '<option value="">All Classes</option>';
+  animateNumber(
+    "uniqueStudents",
+    students
+  );
 
 
-      classes.forEach(function (cls) {
-
-        const option =
-          document.createElement("option");
-
-        option.value = cls;
-        option.textContent = cls;
-
-        classSelect.appendChild(option);
-
-      });
+  animateNumber(
+    "onTimeCount",
+    onTime
+  );
 
 
-      /*
-        Keep selected filters after refresh
-      */
+  animateNumber(
+    "lateCount",
+    late
+  );
+
+}
+
+
+/* =====================================================
+   NUMBER ANIMATION
+===================================================== */
+
+function animateNumber(
+  id,
+  target
+) {
+
+  const element =
+    document.getElementById(id);
+
+
+  const start =
+    Number(
+      element.textContent
+    ) || 0;
+
+
+  if (
+    start === target
+  ) {
+    return;
+  }
+
+
+  const difference =
+    target - start;
+
+
+  const step =
+    Math.max(
+      1,
+      Math.ceil(
+        Math.abs(difference) / 15
+      )
+    );
+
+
+  let current =
+    start;
+
+
+  function update() {
+
+    if (
+      current < target
+    ) {
+
+      current += step;
 
       if (
-        dates.includes(currentDate)
+        current > target
       ) {
-        dateSelect.value =
-          currentDate;
+        current = target;
       }
 
+    } else {
+
+      current -= step;
 
       if (
-        classes.includes(currentClass)
+        current < target
       ) {
-        classSelect.value =
-          currentClass;
+        current = target;
       }
 
     }
 
 
-    /* =========================
-       GET FILTERED DATA
-    ========================= */
+    element.textContent =
+      current;
 
-    function getFilteredRows() {
 
-      const date =
-        document.getElementById(
-          "dateFilter"
-        ).value;
+    if (
+      current !== target
+    ) {
 
-
-      const cls =
-        document.getElementById(
-          "classFilter"
-        ).value;
-
-
-      const name =
-        document.getElementById(
-          "nameFilter"
-        ).value
-        .toLowerCase();
-
-
-      const roll =
-        document.getElementById(
-          "rollFilter"
-        ).value
-        .toLowerCase();
-
-
-      const adm =
-        document.getElementById(
-          "admFilter"
-        ).value
-        .toLowerCase();
-
-
-      return allRows.filter(function (row) {
-
-        return (
-
-          (!date ||
-            row.Date === date)
-
-          &&
-
-          (!cls ||
-            row.Class === cls)
-
-          &&
-
-          (!name ||
-            (row.Name || "")
-              .toLowerCase()
-              .includes(name))
-
-          &&
-
-          (!roll ||
-            (row.RollNo || "")
-              .toLowerCase()
-              .includes(roll))
-
-          &&
-
-          (!adm ||
-            (row.AdmissionNo || "")
-              .toLowerCase()
-              .includes(adm))
-
-        );
-
-      });
-
-    }
-
-
-    /* =========================
-       FILTER EVENTS
-    ========================= */
-
-    document
-      .getElementById("dateFilter")
-      .onchange = function () {
-
-        renderStats();
-        renderChart();
-        renderRecords();
-        renderPercentages();
-
-      };
-
-
-    document
-      .getElementById("classFilter")
-      .onchange = function () {
-
-        renderStats();
-        renderChart();
-        renderRecords();
-        renderPercentages();
-
-      };
-
-
-    document
-      .getElementById("nameFilter")
-      .oninput = function () {
-
-        renderStats();
-        renderChart();
-        renderRecords();
-        renderPercentages();
-
-      };
-
-
-    document
-      .getElementById("rollFilter")
-      .oninput = function () {
-
-        renderStats();
-        renderChart();
-        renderRecords();
-        renderPercentages();
-
-      };
-
-
-    document
-      .getElementById("admFilter")
-      .oninput = function () {
-
-        renderStats();
-        renderChart();
-        renderRecords();
-        renderPercentages();
-
-      };
-
-
-    /* =========================
-       STATISTICS
-    ========================= */
-
-    function renderStats() {
-
-      const rows =
-        getFilteredRows();
-
-
-      let onTime = 0;
-      let late = 0;
-
-
-      rows.forEach(function (row) {
-
-        const status =
-          (row.Status || "")
-            .trim()
-            .toUpperCase();
-
-
-        if (status === "ON TIME") {
-          onTime++;
-        }
-
-
-        if (status === "LATE") {
-          late++;
-        }
-
-      });
-
-
-      const students =
-        new Set(
-          rows.map(function (row) {
-            return row.Name;
-          })
-        ).size;
-
-
-      animateNumber(
-        "totalScans",
-        rows.length
-      );
-
-
-      animateNumber(
-        "uniqueStudents",
-        students
-      );
-
-
-      animateNumber(
-        "onTimeCount",
-        onTime
-      );
-
-
-      animateNumber(
-        "lateCount",
-        late
+      requestAnimationFrame(
+        update
       );
 
     }
 
-
-    /* =========================
-       ANIMATED NUMBERS
-    ========================= */
-
-    function animateNumber(id, target) {
-
-      const element =
-        document.getElementById(id);
+  }
 
 
-      const start =
-        Number(element.textContent) || 0;
+  update();
+
+}
 
 
-      if (start === target) {
-        return;
-      }
+/* =====================================================
+   CHART
+===================================================== */
+
+function renderChart() {
+
+  const rows =
+    getFilteredRows();
 
 
-      let current = start;
+  const data = {};
 
 
-      const difference =
-        target - start;
+  rows.forEach(function(row) {
 
+    if (!data[row.Date]) {
 
-      const step =
-        Math.max(
-          1,
-          Math.ceil(
-            Math.abs(difference) / 20
-          )
-        );
-
-
-      function update() {
-
-        if (current < target) {
-          current += step;
-
-          if (current > target) {
-            current = target;
-          }
-
-        } else {
-
-          current -= step;
-
-          if (current < target) {
-            current = target;
-          }
-
-        }
-
-
-        element.textContent =
-          current;
-
-
-        if (current !== target) {
-          requestAnimationFrame(update);
-        }
-
-      }
-
-
-      update();
+      data[row.Date] = {
+        onTime: 0,
+        late: 0
+      };
 
     }
 
 
-    /* =========================
-       CHART
-    ========================= */
-
-    function renderChart() {
-
-      const rows =
-        getFilteredRows();
+    const status =
+      (row.Status || "")
+        .trim()
+        .toUpperCase();
 
 
-      const data = {};
+    if (
+      status === "ON TIME"
+    ) {
+
+      data[row.Date]
+        .onTime++;
+
+    }
 
 
-      rows.forEach(function (row) {
+    if (
+      status === "LATE"
+    ) {
 
-        if (!data[row.Date]) {
+      data[row.Date]
+        .late++;
 
-          data[row.Date] = {
-            onTime: 0,
-            late: 0
-          };
+    }
 
-        }
-
-
-        const status =
-          (row.Status || "")
-            .trim()
-            .toUpperCase();
+  });
 
 
-        if (status === "ON TIME") {
-          data[row.Date].onTime++;
-        }
+  const dates =
+    Object.keys(data)
+      .sort();
 
 
-        if (status === "LATE") {
-          data[row.Date].late++;
-        }
-
-      });
+  if (chart) {
+    chart.destroy();
+  }
 
 
-      const dates =
-        Object.keys(data).sort();
+  chart =
+    new Chart(
+      document.getElementById(
+        "dailyChart"
+      ),
+      {
 
+        type: "bar",
 
-      const onTime =
-        dates.map(function (date) {
-          return data[date].onTime;
-        });
+        data: {
 
+          labels: dates,
 
-      const late =
-        dates.map(function (date) {
-          return data[date].late;
-        });
+          datasets: [
 
+            {
+              label: "On Time",
 
-      if (chart) {
-        chart.destroy();
-      }
+              data:
+                dates.map(
+                  d =>
+                    data[d].onTime
+                ),
 
+              backgroundColor:
+                "#2F6844",
 
-      const ctx =
-        document.getElementById(
-          "dailyChart"
-        );
-
-
-      chart =
-        new Chart(ctx, {
-
-          type: "bar",
-
-          data: {
-
-            labels: dates,
-
-            datasets: [
-
-              {
-                label: "On Time",
-                data: onTime,
-                backgroundColor: "#2F6844",
-                borderRadius: 5
-              },
-
-              {
-                label: "Late",
-                data: late,
-                backgroundColor: "#B23A2E",
-                borderRadius: 5
-              }
-
-            ]
-
-          },
-
-          options: {
-
-            responsive: true,
-
-            maintainAspectRatio: false,
-
-            animation: {
-              duration: 800
+              borderRadius: 5
             },
 
-            scales: {
+            {
+              label: "Late",
 
-              y: {
+              data:
+                dates.map(
+                  d =>
+                    data[d].late
+                ),
 
-                beginAtZero: true,
+              backgroundColor:
+                "#B23A2E",
 
-                ticks: {
-                  precision: 0
-                }
+              borderRadius: 5
+            }
 
+          ]
+
+        },
+
+        options: {
+
+          responsive: true,
+
+          maintainAspectRatio: false,
+
+          animation: {
+            duration: 600
+          },
+
+          scales: {
+
+            y: {
+
+              beginAtZero: true,
+
+              ticks: {
+                precision: 0
               }
 
             }
 
           }
 
-        });
-
-    }
-
-
-    /* =========================
-       RECORD TABLE
-    ========================= */
-
-    function renderRecords() {
-
-      const rows =
-        getFilteredRows();
-
-
-      const body =
-        document.getElementById(
-          "tableBody"
-        );
-
-
-      const sorted =
-        [...rows].sort(function (a, b) {
-
-          return (
-            (b.Date + b.Time)
-              .localeCompare(
-                a.Date + a.Time
-              )
-          );
-
-        });
-
-
-      body.innerHTML = "";
-
-
-      if (sorted.length === 0) {
-
-        body.innerHTML = `
-          <tr>
-            <td colspan="7" style="text-align:center;">
-              No matching records
-            </td>
-          </tr>
-        `;
-
-        return;
-
-      }
-
-
-      sorted.forEach(function (row) {
-
-        const status =
-          (row.Status || "")
-            .trim()
-            .toUpperCase();
-
-
-        const statusClass =
-          status === "LATE"
-            ? "late"
-            : "on-time";
-
-
-        body.innerHTML += `
-
-          <tr>
-
-            <td>
-              ${escapeHTML(row.Name)}
-            </td>
-
-            <td>
-              ${escapeHTML(row.AdmissionNo)}
-            </td>
-
-            <td>
-              ${escapeHTML(row.RollNo)}
-            </td>
-
-            <td>
-              ${escapeHTML(row.Class)}
-            </td>
-
-            <td>
-              ${escapeHTML(row.Date)}
-            </td>
-
-            <td>
-              ${escapeHTML(row.Time)}
-            </td>
-
-            <td>
-              <span class="status-pill ${statusClass}">
-                ${escapeHTML(row.Status)}
-              </span>
-            </td>
-
-          </tr>
-
-        `;
-
-      });
-
-    }
-
-
-    /* =========================
-       ATTENDANCE PERCENTAGE
-    ========================= */
-
-    function renderPercentages() {
-
-      const rows =
-        getFilteredRows();
-
-
-      const totalDays =
-        new Set(
-          allRows.map(function (row) {
-            return row.Date;
-          })
-        ).size || 1;
-
-
-      const students = {};
-
-
-      rows.forEach(function (row) {
-
-        const key =
-          row.Name +
-          "|" +
-          row.Class;
-
-
-        if (!students[key]) {
-
-          students[key] = {
-
-            name: row.Name,
-
-            cls: row.Class,
-
-            days: new Set()
-
-          };
-
         }
-
-
-        students[key]
-          .days
-          .add(row.Date);
-
-      });
-
-
-      const body =
-        document.getElementById(
-          "percentTableBody"
-        );
-
-
-      body.innerHTML = "";
-
-
-      const studentList =
-        Object.values(students);
-
-
-      if (studentList.length === 0) {
-
-        body.innerHTML = `
-          <tr>
-            <td colspan="5" style="text-align:center;">
-              No attendance data
-            </td>
-          </tr>
-        `;
-
-        return;
-
-      }
-
-
-      studentList.forEach(function (student) {
-
-        const present =
-          student.days.size;
-
-
-        const percentage =
-          Math.round(
-            (present / totalDays) * 100
-          );
-
-
-        const statusClass =
-          percentage >= 75
-            ? "on-time"
-            : "late";
-
-
-        body.innerHTML += `
-
-          <tr>
-
-            <td>
-              ${escapeHTML(student.name)}
-            </td>
-
-            <td>
-              ${escapeHTML(student.cls)}
-            </td>
-
-            <td>
-              ${present}
-            </td>
-
-            <td>
-              ${totalDays}
-            </td>
-
-            <td>
-              <span class="status-pill ${statusClass}">
-                ${percentage}%
-              </span>
-            </td>
-
-          </tr>
-
-        `;
-
-      });
-
-    }
-
-
-    /* =========================
-       SECURITY
-    ========================= */
-
-    function escapeHTML(value) {
-
-      if (!value) {
-        return "";
-      }
-
-
-      return String(value)
-
-        .replace(
-          /&/g,
-          "&amp;"
-        )
-
-        .replace(
-          /</g,
-          "&lt;"
-        )
-
-        .replace(
-          />/g,
-          "&gt;"
-        )
-
-        .replace(
-          /"/g,
-          "&quot;"
-        )
-
-        .replace(
-          /'/g,
-          "&#039;"
-        );
-
-    }
-
-
-    /* =========================
-       AUTO CONNECT
-    ========================= */
-
-    /*
-      The dashboard will automatically
-      try to connect to Google Sheets
-      when the page opens.
-    */
-
-    window.addEventListener(
-      "load",
-      function () {
-
-        setTimeout(function () {
-
-          fetchLiveData();
-
-          if (refreshTimer) {
-            clearInterval(refreshTimer);
-          }
-
-          refreshTimer =
-            setInterval(
-              fetchLiveData,
-              30000
-            );
-
-        }, 500);
 
       }
     );
 
-  </script>
+}
+
+
+/* =====================================================
+   RECORDS
+===================================================== */
+
+function renderRecords() {
+
+  const rows =
+    getFilteredRows();
+
+
+  const body =
+    document.getElementById(
+      "tableBody"
+    );
+
+
+  body.innerHTML = "";
+
+
+  const sorted =
+    [...rows].sort(
+      function(a, b) {
+
+        return (
+          (b.Date + b.Time)
+            .localeCompare(
+              a.Date + a.Time
+            )
+        );
+
+      }
+    );
+
+
+  if (!sorted.length) {
+
+    body.innerHTML = `
+      <tr>
+        <td colspan="7"
+            style="text-align:center;">
+          No matching records
+        </td>
+      </tr>
+    `;
+
+    return;
+  }
+
+
+  sorted.forEach(
+    function(row) {
+
+      const status =
+        (row.Status || "")
+          .trim()
+          .toUpperCase();
+
+
+      const statusClass =
+        status === "LATE"
+          ? "late"
+          : "on-time";
+
+
+      body.innerHTML += `
+
+        <tr>
+
+          <td>
+            ${escapeHTML(row.Name)}
+          </td>
+
+          <td>
+            ${escapeHTML(row.AdmissionNo)}
+          </td>
+
+          <td>
+            ${escapeHTML(row.RollNo)}
+          </td>
+
+          <td>
+            ${escapeHTML(row.Class)}
+          </td>
+
+          <td>
+            ${escapeHTML(row.Date)}
+          </td>
+
+          <td>
+            ${escapeHTML(row.Time)}
+          </td>
+
+          <td>
+            <span class="status-pill ${statusClass}">
+              ${escapeHTML(row.Status)}
+            </span>
+          </td>
+
+        </tr>
+
+      `;
+
+    }
+  );
+
+}
+
+
+/* =====================================================
+   ATTENDANCE %
+===================================================== */
+
+function renderPercentages() {
+
+  const rows =
+    getFilteredRows();
+
+
+  const totalDays =
+    new Set(
+      allRows.map(
+        row => row.Date
+      )
+    ).size || 1;
+
+
+  const students = {};
+
+
+  rows.forEach(function(row) {
+
+    const key =
+      row.AdmissionNo +
+      "|" +
+      row.Class;
+
+
+    if (!students[key]) {
+
+      students[key] = {
+
+        name: row.Name,
+
+        cls: row.Class,
+
+        days: new Set()
+
+      };
+
+    }
+
+
+    students[key]
+      .days
+      .add(row.Date);
+
+  });
+
+
+  const body =
+    document.getElementById(
+      "percentTableBody"
+    );
+
+
+  body.innerHTML = "";
+
+
+  Object.values(
+    students
+  ).forEach(
+    function(student) {
+
+      const present =
+        student.days.size;
+
+
+      const percentage =
+        Math.round(
+          present /
+          totalDays *
+          100
+        );
+
+
+      const statusClass =
+        percentage >= 75
+          ? "on-time"
+          : "late";
+
+
+      body.innerHTML += `
+
+        <tr>
+
+          <td>
+            ${escapeHTML(student.name)}
+          </td>
+
+          <td>
+            ${escapeHTML(student.cls)}
+          </td>
+
+          <td>
+            ${present}
+          </td>
+
+          <td>
+            ${totalDays}
+          </td>
+
+          <td>
+
+            <span class="status-pill ${statusClass}">
+              ${percentage}%
+            </span>
+
+          </td>
+
+        </tr>
+
+      `;
+
+    }
+  );
+
+}
+
+
+/* =====================================================
+   SECURITY
+===================================================== */
+
+function escapeHTML(value) {
+
+  if (!value) {
+    return "";
+  }
+
+
+  return String(value)
+
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+
+    .replace(
+      /</g,
+      "&lt;"
+    )
+
+    .replace(
+      />/g,
+      "&gt;"
+    )
+
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+
+    .replace(
+      /'/g,
+      "&#039;"
+    );
+
+}
+
+
+/* =====================================================
+   AUTO CONNECT
+===================================================== */
+
+window.addEventListener(
+  "load",
+  function() {
+
+    setTimeout(
+      function() {
+
+        fetchLiveData();
+
+
+        refreshTimer =
+          setInterval(
+            fetchLiveData,
+            30000
+          );
+
+      },
+      500
+    );
+
+  }
+);
+
+</script>
 
 </body>
 
