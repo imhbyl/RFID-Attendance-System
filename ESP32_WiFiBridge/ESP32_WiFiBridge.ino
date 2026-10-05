@@ -8,8 +8,8 @@
 // WIFI
 // ======================================================
 
-const char* WIFI_SSID = "Wasee";
-const char* WIFI_PASSWORD = "0503200380";
+const char* WIFI_SSID = "YOUR_WIFI_NAME";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
 // ======================================================
 // GOOGLE APPS SCRIPT
