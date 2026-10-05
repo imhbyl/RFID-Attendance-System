@@ -7,6 +7,7 @@
 
   <title>RFID Attendance System</title>
 
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
@@ -15,7 +16,15 @@
     rel="stylesheet"
   >
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <!-- Chart.js -->
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js">
+  </script>
+
+  <!-- PapaParse -->
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js">
+  </script>
 
   <style>
 
@@ -287,7 +296,7 @@
     ========================= */
 
     .chart-holder {
-      height: 300px;
+      height: 320px;
       position: relative;
     }
 
@@ -382,6 +391,14 @@
     }
 
     /* =========================
+       ERROR
+    ========================= */
+
+    .error-text {
+      color: #B23A2E;
+    }
+
+    /* =========================
        FOOTER
     ========================= */
 
@@ -452,7 +469,19 @@
       }
 
       .chart-holder {
-        height: 250px;
+        height: 260px;
+      }
+
+    }
+
+    @media (max-width: 400px) {
+
+      .stat-num {
+        font-size: 28px;
+      }
+
+      .stat-label {
+        font-size: 12px;
       }
 
     }
@@ -466,7 +495,9 @@
 
 <div class="wrap">
 
-  <!-- HEADER -->
+  <!-- =========================
+       HEADER
+  ========================= -->
 
   <header>
 
@@ -484,7 +515,9 @@
   </header>
 
 
-  <!-- CSV UPLOAD -->
+  <!-- =========================
+       CSV UPLOAD
+  ========================= -->
 
   <div class="upload-row">
 
@@ -511,7 +544,9 @@
   </div>
 
 
-  <!-- GOOGLE SHEETS -->
+  <!-- =========================
+       GOOGLE SHEETS
+  ========================= -->
 
   <div
     class="panel"
@@ -551,7 +586,9 @@
   </div>
 
 
-  <!-- EMPTY STATE -->
+  <!-- =========================
+       EMPTY STATE
+  ========================= -->
 
   <div
     class="empty-state"
@@ -569,14 +606,18 @@
   </div>
 
 
-  <!-- DASHBOARD -->
+  <!-- =========================
+       DASHBOARD
+  ========================= -->
 
   <div
     id="dashboard"
     style="display:none;"
   >
 
-    <!-- STATISTICS -->
+    <!-- =========================
+         STATISTICS
+    ========================= -->
 
     <div class="hero">
 
@@ -646,7 +687,9 @@
     </div>
 
 
-    <!-- DAILY CHART -->
+    <!-- =========================
+         DAILY CHART
+    ========================= -->
 
     <div class="panel">
 
@@ -663,7 +706,9 @@
     </div>
 
 
-    <!-- ATTENDANCE PERCENTAGE -->
+    <!-- =========================
+         ATTENDANCE PERCENTAGE
+    ========================= -->
 
     <div class="panel">
 
@@ -696,7 +741,9 @@
     </div>
 
 
-    <!-- ATTENDANCE RECORDS -->
+    <!-- =========================
+         ATTENDANCE RECORDS
+    ========================= -->
 
     <div class="panel">
 
@@ -792,25 +839,15 @@ const REFRESH_INTERVAL =
 
 
 /* =====================================================
-   GOOGLE SHEETS URLS
+   URLs
 ===================================================== */
 
-/*
-   URL used by the OPEN GOOGLE SHEETS button.
-*/
 const GOOGLE_SHEET_URL =
   "https://docs.google.com/spreadsheets/d/" +
   SHEET_ID +
-  "/edit";
+  "/edit?gid=0#gid=0";
 
-
-/*
-   URL used to READ the Attendance tab.
-
-   This requires the spreadsheet to be accessible
-   to the browser.
-*/
-const SHEET_URL =
+const SHEET_CSV_URL =
   "https://docs.google.com/spreadsheets/d/" +
   SHEET_ID +
   "/gviz/tq?tqx=out:csv&sheet=" +
@@ -818,19 +855,20 @@ const SHEET_URL =
 
 
 /* =====================================================
-   GLOBAL DATA
+   GLOBALS
 ===================================================== */
 
-let attendanceData = [];
-
+let allRows = [];
+let filteredRows = [];
 let dailyChart = null;
+let refreshTimer = null;
 
 
 /* =====================================================
-   ELEMENT HELPER
+   HELPERS
 ===================================================== */
 
-function $(id) {
+function byId(id) {
   return document.getElementById(id);
 }
 
@@ -839,14 +877,13 @@ function $(id) {
    OPEN GOOGLE SHEETS
 ===================================================== */
 
-$("openSheetBtn").addEventListener(
+byId("openSheetBtn").addEventListener(
   "click",
   function () {
 
     window.open(
       GOOGLE_SHEET_URL,
-      "_blank",
-      "noopener,noreferrer"
+      "_blank"
     );
 
   }
@@ -857,35 +894,35 @@ $("openSheetBtn").addEventListener(
    CONNECT LIVE DATA
 ===================================================== */
 
-$("connectBtn").addEventListener(
+byId("connectBtn").addEventListener(
   "click",
   function () {
 
-    loadAttendance();
+    startLiveConnection();
 
   }
 );
 
 
 /* =====================================================
-   CSV LOAD BUTTON
+   CSV FILE BUTTON
 ===================================================== */
 
-$("loadBtn").addEventListener(
+byId("loadBtn").addEventListener(
   "click",
   function () {
 
-    $("fileInput").click();
+    byId("fileInput").click();
 
   }
 );
 
 
 /* =====================================================
-   CSV FILE INPUT
+   CSV UPLOAD
 ===================================================== */
 
-$("fileInput").addEventListener(
+byId("fileInput").addEventListener(
   "change",
   function (event) {
 
@@ -896,76 +933,105 @@ $("fileInput").addEventListener(
       return;
     }
 
-    const reader =
-      new FileReader();
 
-    reader.onload =
-      function (e) {
+    Papa.parse(
+      file,
+      {
+        header: true,
+        skipEmptyLines: true,
 
-        try {
-
-          const parsed =
-            parseCSV(
-              e.target.result
-            );
+        complete: function (results) {
 
           if (
-            parsed.length === 0
+            !results.data ||
+            results.data.length === 0
           ) {
 
-            $("fileStatus").textContent =
+            byId("fileStatus").textContent =
               "CSV contains no attendance records.";
 
             return;
+
           }
 
-          attendanceData =
-            parsed;
 
-          $("fileStatus").textContent =
+          allRows =
+            normalizeRows(
+              results.data
+            );
+
+
+          byId("fileStatus").textContent =
             file.name +
-            " loaded successfully.";
+            " • " +
+            allRows.length +
+            " records";
 
-          processAttendanceData();
 
-        } catch (error) {
+          showDashboard();
+
+        },
+
+        error: function (error) {
 
           console.error(
             "CSV error:",
             error
           );
 
-          $("fileStatus").textContent =
+          byId("fileStatus").textContent =
             "Unable to read CSV file.";
 
         }
-
-      };
-
-    reader.readAsText(file);
+      }
+    );
 
   }
 );
 
 
 /* =====================================================
-   LOAD GOOGLE SHEETS
+   START LIVE CONNECTION
 ===================================================== */
 
-async function loadAttendance() {
+function startLiveConnection() {
+
+  loadGoogleSheet();
+
+
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+  }
+
+
+  refreshTimer =
+    setInterval(
+      loadGoogleSheet,
+      REFRESH_INTERVAL
+    );
+
+}
+
+
+/* =====================================================
+   LOAD GOOGLE SHEET
+===================================================== */
+
+async function loadGoogleSheet() {
 
   const status =
-    $("liveStatus");
+    byId("liveStatus");
+
 
   status.innerHTML =
     '<span class="live-dot"></span>' +
-    "Connecting to Google Sheets...";
+    "Fetching attendance data...";
 
 
   try {
 
     const url =
-      SHEET_URL +
+      SHEET_CSV_URL +
       "&cache=" +
       Date.now();
 
@@ -994,66 +1060,79 @@ async function loadAttendance() {
       await response.text();
 
 
-    console.log(
-      "Google Sheets response:",
-      csvText.substring(0, 300)
-    );
-
-
-    /*
-       If Google sends an HTML login/access page
-       instead of CSV, the sheet is not publicly
-       accessible to the dashboard.
-    */
-
     if (
-      csvText
-        .toLowerCase()
-        .includes("<html")
+      !csvText ||
+      csvText.trim().length === 0
     ) {
 
       throw new Error(
-        "Google Sheets returned an access page. Make the spreadsheet available to anyone with the link as Viewer."
+        "Google returned an empty response."
       );
 
     }
 
 
-    const data =
-      parseCSV(
-        csvText
+    /*
+       Parse with PapaParse.
+       This is important because Google CSV
+       can contain quoted fields.
+    */
+
+    const result =
+      Papa.parse(
+        csvText,
+        {
+          header: true,
+          skipEmptyLines: true
+        }
       );
 
 
     if (
-      data.length === 0
+      result.errors &&
+      result.errors.length > 0
     ) {
 
-      $("emptyState").style.display =
-        "block";
-
-      $("dashboard").style.display =
-        "none";
-
-      status.textContent =
-        "Google Sheet connected, but no attendance records were found.";
-
-      return;
+      console.warn(
+        "CSV parsing warnings:",
+        result.errors
+      );
 
     }
 
 
-    attendanceData =
-      data;
+    allRows =
+      normalizeRows(
+        result.data
+      );
 
 
-    processAttendanceData();
+    console.log(
+      "Google Sheet records:",
+      allRows.length
+    );
+
+
+    if (
+      allRows.length === 0
+    ) {
+
+      throw new Error(
+        "No attendance records were found."
+      );
+
+    }
+
+
+    showDashboard();
 
 
     status.innerHTML =
       '<span class="live-dot"></span>' +
-      "Live data connected • " +
-      attendanceData.length +
+      "Live • Updated " +
+      new Date().toLocaleTimeString() +
+      " • " +
+      allRows.length +
       " records";
 
 
@@ -1065,9 +1144,13 @@ async function loadAttendance() {
     );
 
 
-    status.textContent =
+    status.innerHTML =
+      '<span class="error-text">' +
       "Unable to load Google Sheets: " +
-      error.message;
+      escapeHTML(
+        error.message
+      ) +
+      "</span>";
 
   }
 
@@ -1075,495 +1158,155 @@ async function loadAttendance() {
 
 
 /* =====================================================
-   PROCESS ATTENDANCE DATA
+   NORMALIZE ROWS
 ===================================================== */
 
-function processAttendanceData() {
+function normalizeRows(rows) {
 
-  $("emptyState").style.display =
+  return rows
+    .map(
+      function (row) {
+
+        return {
+          Name:
+            String(
+              row.Name ?? ""
+            ).trim(),
+
+          AdmissionNo:
+            String(
+              row.AdmissionNo ?? ""
+            ).trim(),
+
+          RollNo:
+            String(
+              row.RollNo ?? ""
+            ).trim(),
+
+          Class:
+            String(
+              row.Class ?? ""
+            ).trim(),
+
+          ParentEmail:
+            String(
+              row.ParentEmail ?? ""
+            ).trim(),
+
+          UID:
+            String(
+              row.UID ?? ""
+            ).trim(),
+
+          Date:
+            String(
+              row.Date ?? ""
+            ).trim(),
+
+          Time:
+            String(
+              row.Time ?? ""
+            ).trim(),
+
+          Status:
+            String(
+              row.Status ?? ""
+            ).trim().toUpperCase()
+
+        };
+
+      }
+    )
+    .filter(
+      function (row) {
+
+        return (
+          row.Name !== "" &&
+          row.Date !== ""
+        );
+
+      }
+    );
+
+}
+
+
+/* =====================================================
+   SHOW DASHBOARD
+===================================================== */
+
+function showDashboard() {
+
+  byId("emptyState").style.display =
     "none";
 
-  $("dashboard").style.display =
+  byId("dashboard").style.display =
     "block";
 
 
-  $("lastLoadedStamp").textContent =
+  byId("lastLoadedStamp").textContent =
     "Updated " +
     new Date().toLocaleTimeString();
 
 
   populateFilters();
 
-  renderAttendance();
-
-  updateStatistics();
-
-  renderDailyChart();
-
-  renderAttendancePercentage();
+  refreshDashboard();
 
 }
 
 
 /* =====================================================
-   CSV PARSER
-===================================================== */
-
-function parseCSV(text) {
-
-  const rows = [];
-
-  let row = [];
-
-  let value = "";
-
-  let insideQuotes = false;
-
-
-  for (
-    let i = 0;
-    i < text.length;
-    i++
-  ) {
-
-    const char =
-      text[i];
-
-    const next =
-      text[i + 1];
-
-
-    /*
-       Escaped quotation mark
-    */
-
-    if (
-      char === '"' &&
-      insideQuotes &&
-      next === '"'
-    ) {
-
-      value += '"';
-
-      i++;
-
-      continue;
-
-    }
-
-
-    /*
-       Start/end quotation
-    */
-
-    if (char === '"') {
-
-      insideQuotes =
-        !insideQuotes;
-
-      continue;
-
-    }
-
-
-    /*
-       Column separator
-    */
-
-    if (
-      char === "," &&
-      !insideQuotes
-    ) {
-
-      row.push(value);
-
-      value = "";
-
-      continue;
-
-    }
-
-
-    /*
-       New row
-    */
-
-    if (
-      (char === "\n" ||
-       char === "\r") &&
-      !insideQuotes
-    ) {
-
-      if (
-        char === "\r" &&
-        next === "\n"
-      ) {
-
-        i++;
-
-      }
-
-
-      row.push(value);
-
-      value = "";
-
-
-      if (
-        row.length > 0
-      ) {
-
-        rows.push(row);
-
-      }
-
-
-      row = [];
-
-      continue;
-
-    }
-
-
-    value += char;
-
-  }
-
-
-  /*
-     Last row
-  */
-
-  if (
-    value.length > 0 ||
-    row.length > 0
-  ) {
-
-    row.push(value);
-
-    rows.push(row);
-
-  }
-
-
-  if (
-    rows.length < 2
-  ) {
-
-    return [];
-
-  }
-
-
-  const headers =
-    rows[0].map(
-      function (header) {
-
-        return String(
-          header
-        ).trim();
-
-      }
-    );
-
-
-  return rows
-    .slice(1)
-    .filter(
-      function (currentRow) {
-
-        return currentRow.some(
-          function (cell) {
-
-            return String(
-              cell
-            ).trim() !== "";
-
-          }
-        );
-
-      }
-    )
-    .map(
-      function (currentRow) {
-
-        const item = {};
-
-
-        headers.forEach(
-          function (
-            header,
-            index
-          ) {
-
-            item[header] =
-              currentRow[index] ||
-              "";
-
-          }
-        );
-
-
-        return item;
-
-      }
-    );
-
-}
-
-
-/* =====================================================
-   FILTER VALUE
-===================================================== */
-
-function getFilterValue(id) {
-
-  const element =
-    $(id);
-
-  if (!element) {
-    return "";
-  }
-
-  return String(
-    element.value || ""
-  )
-    .trim()
-    .toLowerCase();
-
-}
-
-
-/* =====================================================
-   FILTER DATA
-===================================================== */
-
-function getFilteredData() {
-
-  const date =
-    getFilterValue(
-      "dateFilter"
-    );
-
-  const studentClass =
-    getFilterValue(
-      "classFilter"
-    );
-
-  const name =
-    getFilterValue(
-      "nameFilter"
-    );
-
-  const roll =
-    getFilterValue(
-      "rollFilter"
-    );
-
-  const admission =
-    getFilterValue(
-      "admFilter"
-    );
-
-
-  return attendanceData.filter(
-    function (row) {
-
-      const rowDate =
-        String(
-          row.Date || ""
-        )
-          .trim()
-          .toLowerCase();
-
-
-      const rowClass =
-        String(
-          row.Class || ""
-        )
-          .trim()
-          .toLowerCase();
-
-
-      const rowName =
-        String(
-          row.Name || ""
-        )
-          .trim()
-          .toLowerCase();
-
-
-      const rowRoll =
-        String(
-          row.RollNo || ""
-        )
-          .trim()
-          .toLowerCase();
-
-
-      const rowAdmission =
-        String(
-          row.AdmissionNo || ""
-        )
-          .trim()
-          .toLowerCase();
-
-
-      if (
-        date &&
-        rowDate !== date
-      ) {
-
-        return false;
-
-      }
-
-
-      if (
-        studentClass &&
-        rowClass !== studentClass
-      ) {
-
-        return false;
-
-      }
-
-
-      if (
-        name &&
-        !rowName.includes(name)
-      ) {
-
-        return false;
-
-      }
-
-
-      if (
-        roll &&
-        !rowRoll.includes(roll)
-      ) {
-
-        return false;
-
-      }
-
-
-      if (
-        admission &&
-        !rowAdmission.includes(
-          admission
-        )
-      ) {
-
-        return false;
-
-      }
-
-
-      return true;
-
-    }
-  );
-
-}
-
-
-/* =====================================================
-   POPULATE FILTERS
+   FILTER OPTIONS
 ===================================================== */
 
 function populateFilters() {
 
-  const classSelect =
-    $("classFilter");
+  const dateFilter =
+    byId("dateFilter");
 
-  const dateSelect =
-    $("dateFilter");
-
-
-  if (
-    !classSelect ||
-    !dateSelect
-  ) {
-
-    return;
-
-  }
+  const classFilter =
+    byId("classFilter");
 
 
-  const oldClass =
-    classSelect.value;
+  const previousDate =
+    dateFilter.value;
 
-  const oldDate =
-    dateSelect.value;
-
-
-  const classes =
-    [
-      ...new Set(
-        attendanceData
-          .map(
-            function (row) {
-
-              return String(
-                row.Class || ""
-              ).trim();
-
-            }
-          )
-          .filter(Boolean)
-      )
-    ]
-      .sort();
+  const previousClass =
+    classFilter.value;
 
 
   const dates =
     [
       ...new Set(
-        attendanceData
+        allRows
           .map(
             function (row) {
-
-              return String(
-                row.Date || ""
-              ).trim();
-
+              return row.Date;
             }
           )
           .filter(Boolean)
       )
     ]
-      .sort();
+    .sort();
 
 
-  classSelect.innerHTML =
-    '<option value="">All Classes</option>';
+  const classes =
+    [
+      ...new Set(
+        allRows
+          .map(
+            function (row) {
+              return row.Class;
+            }
+          )
+          .filter(Boolean)
+      )
+    ]
+    .sort();
 
 
-  classes.forEach(
-    function (studentClass) {
-
-      const option =
-        document.createElement(
-          "option"
-        );
-
-      option.value =
-        studentClass;
-
-      option.textContent =
-        studentClass;
-
-      classSelect.appendChild(
-        option
-      );
-
-    }
-  );
-
-
-  dateSelect.innerHTML =
+  dateFilter.innerHTML =
     '<option value="">All Dates</option>';
 
 
@@ -1581,7 +1324,7 @@ function populateFilters() {
       option.textContent =
         date;
 
-      dateSelect.appendChild(
+      dateFilter.appendChild(
         option
       );
 
@@ -1589,39 +1332,270 @@ function populateFilters() {
   );
 
 
-  classSelect.value =
-    oldClass;
+  classFilter.innerHTML =
+    '<option value="">All Classes</option>';
 
-  dateSelect.value =
-    oldDate;
+
+  classes.forEach(
+    function (studentClass) {
+
+      const option =
+        document.createElement(
+          "option"
+        );
+
+      option.value =
+        studentClass;
+
+      option.textContent =
+        studentClass;
+
+      classFilter.appendChild(
+        option
+      );
+
+    }
+  );
+
+
+  if (
+    dates.includes(
+      previousDate
+    )
+  ) {
+
+    dateFilter.value =
+      previousDate;
+
+  }
+
+
+  if (
+    classes.includes(
+      previousClass
+    )
+  ) {
+
+    classFilter.value =
+      previousClass;
+
+  }
 
 }
 
 
 /* =====================================================
-   RENDER ATTENDANCE TABLE
+   GET FILTERED ROWS
 ===================================================== */
 
-function renderAttendance() {
+function getFilteredRows() {
+
+  const date =
+    byId("dateFilter")
+      .value
+      .trim()
+      .toLowerCase();
+
+
+  const studentClass =
+    byId("classFilter")
+      .value
+      .trim()
+      .toLowerCase();
+
+
+  const name =
+    byId("nameFilter")
+      .value
+      .trim()
+      .toLowerCase();
+
+
+  const roll =
+    byId("rollFilter")
+      .value
+      .trim()
+      .toLowerCase();
+
+
+  const admission =
+    byId("admFilter")
+      .value
+      .trim()
+      .toLowerCase();
+
+
+  return allRows.filter(
+    function (row) {
+
+      const rowDate =
+        row.Date.toLowerCase();
+
+      const rowClass =
+        row.Class.toLowerCase();
+
+      const rowName =
+        row.Name.toLowerCase();
+
+      const rowRoll =
+        row.RollNo.toLowerCase();
+
+      const rowAdmission =
+        row.AdmissionNo.toLowerCase();
+
+
+      return (
+        (!date ||
+          rowDate === date) &&
+
+        (!studentClass ||
+          rowClass === studentClass) &&
+
+        (!name ||
+          rowName.includes(name)) &&
+
+        (!roll ||
+          rowRoll.includes(roll)) &&
+
+        (!admission ||
+          rowAdmission.includes(admission))
+      );
+
+    }
+  );
+
+}
+
+
+/* =====================================================
+   REFRESH DASHBOARD
+===================================================== */
+
+function refreshDashboard() {
+
+  filteredRows =
+    getFilteredRows();
+
+  renderStatistics();
+  renderAttendanceTable();
+  renderDailyChart();
+  renderAttendancePercentage();
+
+}
+
+
+/* =====================================================
+   STATISTICS
+===================================================== */
+
+function renderStatistics() {
+
+  const total =
+    filteredRows.length;
+
+
+  const late =
+    filteredRows.filter(
+      function (row) {
+
+        return row.Status === "LATE";
+
+      }
+    ).length;
+
+
+  const onTime =
+    filteredRows.filter(
+      function (row) {
+
+        return row.Status === "ON TIME";
+
+      }
+    ).length;
+
+
+  const studentKeys =
+    new Set();
+
+
+  filteredRows.forEach(
+    function (row) {
+
+      const key =
+        row.AdmissionNo ||
+        row.Name;
+
+      if (key) {
+        studentKeys.add(
+          key
+        );
+      }
+
+    }
+  );
+
+
+  byId("totalScans").textContent =
+    total;
+
+  byId("uniqueStudents").textContent =
+    studentKeys.size;
+
+  byId("onTimeCount").textContent =
+    onTime;
+
+  byId("lateCount").textContent =
+    late;
+
+}
+
+
+/* =====================================================
+   ATTENDANCE TABLE
+===================================================== */
+
+function renderAttendanceTable() {
 
   const tbody =
-    $("tableBody");
-
-
-  if (!tbody) {
-    return;
-  }
-
-
-  const filtered =
-    getFilteredData();
+    byId("tableBody");
 
 
   tbody.innerHTML =
     "";
 
 
-  filtered.forEach(
+  if (
+    filteredRows.length === 0
+  ) {
+
+    tbody.innerHTML =
+      `<tr>
+        <td colspan="7" style="text-align:center;">
+          No matching records
+        </td>
+      </tr>`;
+
+    return;
+
+  }
+
+
+  const rows =
+    [...filteredRows].sort(
+      function (a, b) {
+
+        return (
+          (b.Date + b.Time)
+            .localeCompare(
+              a.Date + a.Time
+            )
+        );
+
+      }
+    );
+
+
+  rows.forEach(
     function (row) {
 
       const tr =
@@ -1630,39 +1604,34 @@ function renderAttendance() {
         );
 
 
-      const values = [
+      addCell(
+        tr,
+        row.Name
+      );
 
-        row.Name || "",
+      addCell(
+        tr,
+        row.AdmissionNo
+      );
 
-        row.AdmissionNo || "",
+      addCell(
+        tr,
+        row.RollNo
+      );
 
-        row.RollNo || "",
+      addCell(
+        tr,
+        row.Class
+      );
 
-        row.Class || "",
+      addCell(
+        tr,
+        row.Date
+      );
 
-        row.Date || "",
-
-        row.Time || ""
-
-      ];
-
-
-      values.forEach(
-        function (value) {
-
-          const td =
-            document.createElement(
-              "td"
-            );
-
-          td.textContent =
-            value;
-
-          tr.appendChild(
-            td
-          );
-
-        }
+      addCell(
+        tr,
+        row.Time
       );
 
 
@@ -1672,14 +1641,6 @@ function renderAttendance() {
         );
 
 
-      const status =
-        String(
-          row.Status || ""
-        )
-          .trim()
-          .toUpperCase();
-
-
       const pill =
         document.createElement(
           "span"
@@ -1687,35 +1648,23 @@ function renderAttendance() {
 
 
       pill.className =
-        "status-pill";
-
-
-      if (
-        status === "LATE"
-      ) {
-
-        pill.classList.add(
-          "late"
+        "status-pill " +
+        (
+          row.Status === "LATE"
+            ? "late"
+            : "on-time"
         );
 
-        pill.textContent =
-          "LATE";
 
-      } else {
-
-        pill.classList.add(
-          "on-time"
-        );
-
-        pill.textContent =
-          "ON TIME";
-
-      }
+      pill.textContent =
+        row.Status ||
+        "ON TIME";
 
 
       statusCell.appendChild(
         pill
       );
+
 
       tr.appendChild(
         statusCell
@@ -1733,76 +1682,25 @@ function renderAttendance() {
 
 
 /* =====================================================
-   UPDATE STATISTICS
+   ADD TABLE CELL
 ===================================================== */
 
-function updateStatistics() {
+function addCell(
+  row,
+  value
+) {
 
-  const filtered =
-    getFilteredData();
-
-
-  const total =
-    filtered.length;
-
-
-  const late =
-    filtered.filter(
-      function (row) {
-
-        return String(
-          row.Status || ""
-        )
-          .trim()
-          .toUpperCase() ===
-          "LATE";
-
-      }
-    ).length;
-
-
-  const onTime =
-    filtered.filter(
-      function (row) {
-
-        return String(
-          row.Status || ""
-        )
-          .trim()
-          .toUpperCase() ===
-          "ON TIME";
-
-      }
-    ).length;
-
-
-  const students =
-    new Set(
-      filtered.map(
-        function (row) {
-
-          return String(
-            row.AdmissionNo ||
-            row.Name ||
-            ""
-          ).trim();
-
-        }
-      )
+  const td =
+    document.createElement(
+      "td"
     );
 
+  td.textContent =
+    value || "";
 
-  $("totalScans").textContent =
-    total;
-
-  $("uniqueStudents").textContent =
-    students.size;
-
-  $("lateCount").textContent =
-    late;
-
-  $("onTimeCount").textContent =
-    onTime;
+  row.appendChild(
+    td
+  );
 
 }
 
@@ -1814,7 +1712,7 @@ function updateStatistics() {
 function renderDailyChart() {
 
   const canvas =
-    $("dailyChart");
+    byId("dailyChart");
 
 
   if (!canvas) {
@@ -1822,38 +1720,41 @@ function renderDailyChart() {
   }
 
 
-  const filtered =
-    getFilteredData();
+  const daily = {};
 
 
-  const dailyCounts = {};
-
-
-  filtered.forEach(
+  filteredRows.forEach(
     function (row) {
 
       const date =
-        String(
-          row.Date || ""
-        ).trim();
-
+        row.Date;
 
       if (!date) {
         return;
       }
 
 
-      if (
-        !dailyCounts[date]
-      ) {
+      if (!daily[date]) {
 
-        dailyCounts[date] =
-          0;
+        daily[date] = {
+          onTime: 0,
+          late: 0
+        };
 
       }
 
 
-      dailyCounts[date]++;
+      if (
+        row.Status === "LATE"
+      ) {
+
+        daily[date].late++;
+
+      } else {
+
+        daily[date].onTime++;
+
+      }
 
     }
   );
@@ -1861,15 +1762,25 @@ function renderDailyChart() {
 
   const dates =
     Object.keys(
-      dailyCounts
+      daily
     ).sort();
 
 
-  const counts =
+  const onTime =
     dates.map(
       function (date) {
 
-        return dailyCounts[date];
+        return daily[date].onTime;
+
+      }
+    );
+
+
+  const late =
+    dates.map(
+      function (date) {
+
+        return daily[date].late;
 
       }
     );
@@ -1879,9 +1790,6 @@ function renderDailyChart() {
 
     dailyChart.destroy();
 
-    dailyChart =
-      null;
-
   }
 
 
@@ -1890,28 +1798,41 @@ function renderDailyChart() {
       canvas,
       {
 
-        type: "line",
+        type: "bar",
 
         data: {
 
-          labels: dates,
+          labels:
+            dates,
 
           datasets: [
 
             {
-
               label:
-                "Attendance Records",
+                "On Time",
 
               data:
-                counts,
+                onTime,
 
-              tension:
-                0.3,
+              backgroundColor:
+                "#2F6844",
 
-              fill:
-                false
+              borderRadius:
+                5
+            },
 
+            {
+              label:
+                "Late",
+
+              data:
+                late,
+
+              backgroundColor:
+                "#B23A2E",
+
+              borderRadius:
+                5
             }
 
           ]
@@ -1920,32 +1841,41 @@ function renderDailyChart() {
 
         options: {
 
-          responsive: true,
+          responsive:
+            true,
 
-          maintainAspectRatio: false,
+          maintainAspectRatio:
+            false,
 
-          plugins: {
+          animation: {
+            duration: 500
+          },
 
-            legend: {
+          scales: {
 
-              display: true
+            x: {
+              stacked: true
+            },
+
+            y: {
+
+              stacked: true,
+
+              beginAtZero:
+                true,
+
+              ticks: {
+                precision: 0
+              }
 
             }
 
           },
 
-          scales: {
+          plugins: {
 
-            y: {
-
-              beginAtZero: true,
-
-              ticks: {
-
-                precision: 0
-
-              }
-
+            legend: {
+              display: true
             }
 
           }
@@ -1965,39 +1895,47 @@ function renderDailyChart() {
 function renderAttendancePercentage() {
 
   const tbody =
-    $("percentTableBody");
-
-
-  if (!tbody) {
-    return;
-  }
+    byId("percentTableBody");
 
 
   tbody.innerHTML =
     "";
 
 
+  /*
+     Use all school days in the data as denominator.
+  */
+
+  const totalSchoolDays =
+    new Set(
+      allRows
+        .map(
+          function (row) {
+            return row.Date;
+          }
+        )
+        .filter(Boolean)
+    ).size;
+
+
+  if (
+    totalSchoolDays === 0
+  ) {
+
+    return;
+
+  }
+
+
   const students = {};
 
 
-  attendanceData.forEach(
+  filteredRows.forEach(
     function (row) {
 
-      const admission =
-        String(
-          row.AdmissionNo || ""
-        ).trim();
-
-
-      const name =
-        String(
-          row.Name || ""
-        ).trim();
-
-
       const key =
-        admission ||
-        name;
+        row.AdmissionNo ||
+        row.Name;
 
 
       if (!key) {
@@ -2005,19 +1943,17 @@ function renderAttendancePercentage() {
       }
 
 
-      if (
-        !students[key]
-      ) {
+      if (!students[key]) {
 
         students[key] = {
 
           name:
-            name,
+            row.Name,
 
           className:
-            row.Class || "",
+            row.Class,
 
-          days:
+          dates:
             new Set()
 
         };
@@ -2025,17 +1961,17 @@ function renderAttendancePercentage() {
       }
 
 
-      const date =
-        String(
-          row.Date || ""
-        ).trim();
+      /*
+         Every recorded scan counts as a present day.
+      */
 
+      if (
+        row.Date
+      ) {
 
-      if (date) {
-
-        students[key].days.add(
-          date
-        );
+        students[key]
+          .dates
+          .add(row.Date);
 
       }
 
@@ -2043,30 +1979,22 @@ function renderAttendancePercentage() {
   );
 
 
-  const allDates =
-    new Set(
-      attendanceData
-        .map(
-          function (row) {
-
-            return String(
-              row.Date || ""
-            ).trim();
-
-          }
-        )
-        .filter(Boolean)
-    );
-
-
-  const totalDays =
-    allDates.size;
-
-
   Object.values(
     students
   ).forEach(
     function (student) {
+
+      const presentDays =
+        student.dates.size;
+
+
+      const percentage =
+        (
+          presentDays /
+          totalSchoolDays
+        ) *
+        100;
+
 
       const tr =
         document.createElement(
@@ -2074,60 +2002,59 @@ function renderAttendancePercentage() {
         );
 
 
-      const present =
-        student.days.size;
+      addCell(
+        tr,
+        student.name
+      );
+
+      addCell(
+        tr,
+        student.className
+      );
+
+      addCell(
+        tr,
+        presentDays
+      );
+
+      addCell(
+        tr,
+        totalSchoolDays
+      );
+
+      const percentageCell =
+        document.createElement(
+          "td"
+        );
 
 
-      let percentage =
-        0;
+      const pill =
+        document.createElement(
+          "span"
+        );
 
 
-      if (
-        totalDays > 0
-      ) {
-
-        percentage =
-          (
-            present /
-            totalDays
-          ) *
-          100;
-
-      }
+      pill.className =
+        "status-pill " +
+        (
+          percentage >= 75
+            ? "on-time"
+            : "late"
+        );
 
 
-      const values = [
-
-        student.name,
-
-        student.className,
-
-        present,
-
-        totalDays,
-
+      pill.textContent =
         percentage.toFixed(1) +
-        "%"
-
-      ];
+        "%";
 
 
-      values.forEach(
-        function (value) {
+      percentageCell.appendChild(
+        pill
+      );
 
-          const td =
-            document.createElement(
-              "td"
-            );
 
-          td.textContent =
-            value;
-
-          tr.appendChild(
-            td
-          );
-
-        }
+      tr.appendChild(
+        percentageCell
       );
 
 
@@ -2142,24 +2069,7 @@ function renderAttendancePercentage() {
 
 
 /* =====================================================
-   REFRESH DASHBOARD
-===================================================== */
-
-function refreshDashboard() {
-
-  renderAttendance();
-
-  updateStatistics();
-
-  renderDailyChart();
-
-  renderAttendancePercentage();
-
-}
-
-
-/* =====================================================
-   FILTER EVENTS
+   FILTER LISTENERS
 ===================================================== */
 
 [
@@ -2172,12 +2082,7 @@ function refreshDashboard() {
   function (id) {
 
     const element =
-      $(id);
-
-
-    if (!element) {
-      return;
-    }
+      byId(id);
 
 
     element.addEventListener(
@@ -2196,31 +2101,58 @@ function refreshDashboard() {
 
 
 /* =====================================================
-   AUTO REFRESH
+   CSV / GOOGLE DATA STARTUP
 ===================================================== */
 
-setInterval(
+/*
+   We do not automatically connect until the user
+   clicks Connect Live Data.
+*/
+
+window.addEventListener(
+  "load",
   function () {
 
-    /*
-       Only refresh if the dashboard has
-       already successfully connected once.
-    */
+    byId("liveStatus").textContent =
+      'Click "Connect Live Data" to load the latest attendance.';
 
-    if (
-      attendanceData.length > 0
-    ) {
-
-      loadAttendance();
-
-    }
-
-  },
-  REFRESH_INTERVAL
+  }
 );
+
+
+/* =====================================================
+   ESCAPE HTML
+===================================================== */
+
+function escapeHTML(value) {
+
+  return String(
+    value ?? ""
+  )
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
+    );
+
+}
 
 </script>
 
 </body>
-
 </html>
