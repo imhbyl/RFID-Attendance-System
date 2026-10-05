@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance Register</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --paper: #ECEAE1;
+    --paper-raised: #F6F4EC;
+    --ink: #1E2A38;
+    --ink-soft: #4B5B6B;
+    --line: #D4D0C2;
+    --stamp-red: #B23A2E;
+    --stamp-red-soft: #F3DEDA;
+    --stamp-green: #2F6844;
+    --stamp-green-soft: #DCE8DD;
+    --navy: #1E3A5F;
+    --font-display: 'Fraunces', serif;
+    --font-body: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #171B22;
+      --paper-raised: #1F252E;
+      --ink: #E9E7DE;
+      --ink-soft: #A6ADB8;
+      --line: #333A45;
+      --stamp-red-soft: #3A2320;
+      --stamp-green-soft: #1E2E22;
+      --navy: #7FA8D9;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #171B22;
+    --paper-raised: #1F252E;
+    --ink: #E9E7DE;
+    --ink-soft: #A6ADB8;
+    --line: #333A45;
+    --stamp-red-soft: #3A2320;
+    --stamp-green-soft: #1E2E22;
+    --navy: #7FA8D9;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1.5rem;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .stamp-date {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    border: 1.5px solid var(--ink-soft);
+    padding: 0.3rem 0.7rem;
+    border-radius: 3px;
+    transform: rotate(-2deg);
+  }
+
+  .upload-row {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+  .file-btn {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.95rem;
+    background: var(--navy);
+    color: var(--paper-raised);
+    border: none;
+    padding: 0.65rem 1.2rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .file-btn:hover { opacity: 0.9; }
+  #fileInput { display: none; }
+  .file-status { font-size: 0.9rem; color: var(--ink-soft); }
+
+  .empty-state {
+    border: 1.5px dashed var(--line);
+    border-radius: 6px;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: var(--ink-soft);
+  }
+  .empty-state p { margin: 0.4rem 0; }
+
+  .hero {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+  .stat-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1.2rem 1.3rem;
+  }
+  .stat-card.headline {
+    grid-column: span 1;
+  }
+  .stat-num {
+    font-family: var(--font-display);
+    font-size: 2.6rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.3rem;
+  }
+  .stat-label {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+  .stat-card.on-time .stat-num { color: var(--stamp-green); }
+  .stat-card.late .stat-num { color: var(--stamp-red); }
+
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .panel h2 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+  }
+  .chart-holder { position: relative; height: 220px; }
+
+  .table-controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .table-controls select, .table-controls input {
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 560px; }
+  th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-weight: 600; color: var(--ink-soft); font-size: 0.8rem; text-transform: none; }
+  tr:hover td { background: var(--paper); }
+  .status-pill {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+  }
+  .status-pill.on-time { background: var(--stamp-green-soft); color: var(--stamp-green); }
+  .status-pill.late { background: var(--stamp-red-soft); color: var(--stamp-red); }
+
+  footer { text-align: center; color: var(--ink-soft); font-size: 0.8rem; margin-top: 2.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Attendance Register</h1>
+    <div class="stamp-date" id="lastLoadedStamp">no file loaded</div>
+  </header>
+
+  <div class="upload-row">
+    <button class="file-btn" id="loadBtn">Load attendance_log.csv</button>
+    <input type="file" id="fileInput" accept=".csv">
+    <span class="file-status" id="fileStatus">Export the file from your Arduino logger, then open it here.</span>
+  </div>
+
+  <div class="panel" id="liveFetchPanel">
+    <h2>Live from Google Sheets</h2>
+    <div class="table-controls">
+      <input type="text" id="sheetUrlInput" placeholder="Paste your published Sheet CSV URL..." style="flex:1; min-width:220px;">
+      <button class="file-btn" id="connectBtn">Connect</button>
+    </div>
+    <span class="file-status" id="liveStatus">Note: live auto-fetch only works once this page is hosted outside Claude's preview (e.g. GitHub Pages) — it won't load here due to browser security rules in this preview.</span>
+  </div>
+
+  <div id="emptyState" class="empty-state">
+    <p><strong>No data loaded yet.</strong></p>
+    <p>Click "Load attendance_log.csv" above, or connect to a live Google Sheet.</p>
+  </div>
+
+  <div id="dashboard" style="display:none;">
+
+    <div class="hero">
+      <div class="stat-card headline">
+        <div class="stat-num" id="totalScans">0</div>
+        <div class="stat-label">total records</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="uniqueStudents">0</div>
+        <div class="stat-label">students seen</div>
+      </div>
+      <div class="stat-card on-time">
+        <div class="stat-num" id="onTimeCount">0</div>
+        <div class="stat-label">on time</div>
+      </div>
+      <div class="stat-card late">
+        <div class="stat-num" id="lateCount">0</div>
+        <div class="stat-label">late</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Attendance by day</h2>
+      <div class="chart-holder"><canvas id="dailyChart"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <h2>Attendance percentage by student</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Class</th><th>Days present</th><th>Total days</th><th>Attendance %</th></tr>
+          </thead>
+          <tbody id="percentTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Records</h2>
+      <div class="table-controls">
+        <select id="dateFilter"><option value="">All dates</option></select>
+        <select id="classFilter"><option value="">All classes</option></select>
+        <input type="text" id="nameFilter" placeholder="Filter by name...">
+        <input type="text" id="rollFilter" placeholder="Roll no...">
+        <input type="text" id="admFilter" placeholder="Admission no...">
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Admission No</th><th>Roll No</th><th>Class</th><th>Date</th><th>Time</th><th>Status</th></tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>Data stays in your browser — nothing here is uploaded anywhere.</footer>
+</div>
+
+<script>
+let allRows = [];
+let chartInstance = null;
+let refreshTimer = null;
+
+document.getElementById('loadBtn').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      allRows = results.data.filter(r => r.Name && r.Date);
+      document.getElementById('fileStatus').textContent = file.name + ' — ' + allRows.length + ' records';
+      document.getElementById('lastLoadedStamp').textContent = 'loaded ' + new Date().toLocaleTimeString();
+      render();
+    },
+    error: (err) => {
+      document.getElementById('fileStatus').textContent = 'Could not read that file: ' + err.message;
+    }
+  });
+});
+
+document.getElementById('connectBtn').addEventListener('click', () => {
+  const url = document.getElementById('sheetUrlInput').value.trim();
+  if (!url) return;
+
+  localStorage.setItem('sheetCsvUrl', url);
+  if (refreshTimer) clearInterval(refreshTimer);
+
+  fetchLiveData(url);
+  refreshTimer = setInterval(() => fetchLiveData(url), 30000); // refresh every 30s
+});
+
+function fetchLiveData(url) {
+  document.getElementById('liveStatus').textContent = 'Fetching...';
+
+  fetch(url)
+    .then(res => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.text();
+    })
+    .then(csvText => {
+      const results = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      allRows = results.data.filter(r => r.Name && r.Date);
+      document.getElementById('liveStatus').textContent =
+        'Live — last updated ' + new Date().toLocaleTimeString() + ' (' + allRows.length + ' records)';
+      document.getElementById('lastLoadedStamp').textContent = 'live sync ' + new Date().toLocaleTimeString();
+      render();
+    })
+    .catch(err => {
+      document.getElementById('liveStatus').textContent =
+        'Could not fetch live data (' + err.message + '). This is expected inside Claude\'s preview — try this page once hosted on GitHub Pages.';
+    });
+}
+
+// Restore a previously saved Sheet URL, if any
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('sheetCsvUrl');
+  if (saved) document.getElementById('sheetUrlInput').value = saved;
+});
+
+function render() {
+  if (allRows.length === 0) return;
+
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+
+  populateDateFilter();
+  populateClassFilter();
+  renderStats(allRows);
+  renderChart(allRows);
+  renderTable(allRows);
+  renderPercentTable(allRows);
+
+  document.getElementById('dateFilter').addEventListener('change', applyFilters);
+  document.getElementById('classFilter').addEventListener('change', applyFilters);
+  document.getElementById('nameFilter').addEventListener('input', applyFilters);
+  document.getElementById('rollFilter').addEventListener('input', applyFilters);
+  document.getElementById('admFilter').addEventListener('input', applyFilters);
+}
+
+function applyFilters() {
+  const dateVal = document.getElementById('dateFilter').value;
+  const classVal = document.getElementById('classFilter').value;
+  const nameVal = document.getElementById('nameFilter').value.toLowerCase();
+  const rollVal = document.getElementById('rollFilter').value.toLowerCase();
+  const admVal = document.getElementById('admFilter').value.toLowerCase();
+
+  const filtered = allRows.filter(r => {
+    const matchDate = !dateVal || r.Date === dateVal;
+    const matchClass = !classVal || r.Class === classVal;
+    const matchName = !nameVal || (r.Name || '').toLowerCase().includes(nameVal);
+    const matchRoll = !rollVal || (r.RollNo || '').toLowerCase().includes(rollVal);
+    const matchAdm = !admVal || (r.AdmissionNo || '').toLowerCase().includes(admVal);
+    return matchDate && matchClass && matchName && matchRoll && matchAdm;
+  });
+
+  renderStats(filtered);
+  renderTable(filtered);
+  renderPercentTable(filtered);
+}
+
+function populateClassFilter() {
+  const select = document.getElementById('classFilter');
+  const classes = [...new Set(allRows.map(r => r.Class))].filter(Boolean).sort();
+  select.innerHTML = '<option value="">All classes</option>' +
+    classes.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function populateDateFilter() {
+  const select = document.getElementById('dateFilter');
+  const dates = [...new Set(allRows.map(r => r.Date))].sort();
+  select.innerHTML = '<option value="">All dates</option>' +
+    dates.map(d => `<option value="${d}">${d}</option>`).join('');
+}
+
+function renderStats(rows) {
+  const onTime = rows.filter(r => (r.Status || '').trim().toUpperCase() === 'ON TIME').length;
+  const late = rows.filter(r => (r.Status || '').trim().toUpperCase() === 'LATE').length;
+  const uniqueNames = new Set(rows.map(r => r.Name)).size;
+
+  document.getElementById('totalScans').textContent = rows.length;
+  document.getElementById('uniqueStudents').textContent = uniqueNames;
+  document.getElementById('onTimeCount').textContent = onTime;
+  document.getElementById('lateCount').textContent = late;
+}
+
+function renderChart(rows) {
+  const byDate = {};
+  rows.forEach(r => {
+    if (!byDate[r.Date]) byDate[r.Date] = { onTime: 0, late: 0 };
+    const status = (r.Status || '').trim().toUpperCase();
+    if (status === 'ON TIME') byDate[r.Date].onTime++;
+    else if (status === 'LATE') byDate[r.Date].late++;
+  });
+
+  const dates = Object.keys(byDate).sort();
+  const onTimeData = dates.map(d => byDate[d].onTime);
+  const lateData = dates.map(d => byDate[d].late);
+
+  const styles = getComputedStyle(document.documentElement);
+  const green = styles.getPropertyValue('--stamp-green').trim();
+  const red = styles.getPropertyValue('--stamp-red').trim();
+  const inkSoft = styles.getPropertyValue('--ink-soft').trim();
+
+  if (chartInstance) chartInstance.destroy();
+
+  const ctx = document.getElementById('dailyChart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: dates,
+      datasets: [
+        { label: 'On time', data: onTimeData, backgroundColor: green, borderRadius: 3, stack: 's' },
+        { label: 'Late', data: lateData, backgroundColor: red, borderRadius: 3, stack: 's' }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, ticks: { color: inkSoft }, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: inkSoft, precision: 0 }, grid: { color: 'rgba(128,128,128,0.15)' } }
+      },
+      plugins: { legend: { labels: { color: inkSoft } } }
+    }
+  });
+}
+
+function renderPercentTable(rows) {
+  const totalDays = new Set(rows.map(r => r.Date)).size || 1;
+
+  const byStudent = {};
+  rows.forEach(r => {
+    const key = r.Name + '|' + r.Class;
+    if (!byStudent[key]) {
+      byStudent[key] = { name: r.Name, cls: r.Class, days: new Set() };
+    }
+    byStudent[key].days.add(r.Date);
+  });
+
+  const students = Object.values(byStudent).map(s => ({
+    name: s.name,
+    cls: s.cls,
+    present: s.days.size,
+    total: totalDays,
+    pct: Math.round((s.days.size / totalDays) * 100)
+  })).sort((a, b) => b.pct - a.pct);
+
+  const tbody = document.getElementById('percentTableBody');
+  tbody.innerHTML = students.map(s => {
+    const pillClass = s.pct >= 75 ? 'on-time' : 'late';
+    return `<tr>
+      <td>${escapeHtml(s.name)}</td>
+      <td>${escapeHtml(s.cls)}</td>
+      <td>${s.present}</td>
+      <td>${s.total}</td>
+      <td><span class="status-pill ${pillClass}">${s.pct}%</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('tableBody');
+  const sorted = [...rows].sort((a, b) => (b.Date + b.Time).localeCompare(a.Date + a.Time));
+
+  tbody.innerHTML = sorted.map(r => {
+    const status = (r.Status || '').trim().toUpperCase();
+    const pillClass = status === 'LATE' ? 'late' : 'on-time';
+    return `<tr>
+      <td>${escapeHtml(r.Name)}</td>
+      <td>${escapeHtml(r.AdmissionNo)}</td>
+      <td>${escapeHtml(r.RollNo)}</td>
+      <td>${escapeHtml(r.Class)}</td>
+      <td>${escapeHtml(r.Date)}</td>
+      <td>${escapeHtml(r.Time)}</td>
+      <td><span class="status-pill ${pillClass}">${escapeHtml(r.Status)}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>
