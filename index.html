@@ -336,7 +336,6 @@
     }
 
     @media (max-width: 700px) {
-
       .header h1 {
         font-size: 23px;
       }
@@ -348,7 +347,6 @@
       .chart-container {
         height: 280px;
       }
-
     }
   </style>
 </head>
@@ -357,18 +355,10 @@
 
   <div class="header">
     <div class="header-content">
-
-      <h1>
-        RFID Attendance Dashboard
-      </h1>
-
-      <p>
-        Live attendance monitoring from Google Sheet1
-      </p>
-
+      <h1>RFID Attendance Dashboard</h1>
+      <p>Live attendance monitoring from Google Sheet1</p>
     </div>
   </div>
-
 
   <div class="container">
 
@@ -404,9 +394,7 @@
         accept=".csv"
         style="display:none"
         onchange="loadCSVFile(event)">
-
     </div>
-
 
     <div
       id="connectionStatus"
@@ -424,14 +412,10 @@
 
     </div>
 
-
     <div class="filters">
 
       <div class="filter-group">
-
-        <label for="dateFilter">
-          Date
-        </label>
+        <label for="dateFilter">Date</label>
 
         <select
           id="dateFilter"
@@ -442,15 +426,10 @@
           </option>
 
         </select>
-
       </div>
 
-
       <div class="filter-group">
-
-        <label for="classFilter">
-          Class
-        </label>
+        <label for="classFilter">Class</label>
 
         <select
           id="classFilter"
@@ -461,61 +440,43 @@
           </option>
 
         </select>
-
       </div>
 
-
       <div class="filter-group">
-
-        <label for="nameFilter">
-          Name
-        </label>
+        <label for="nameFilter">Name</label>
 
         <input
           type="text"
           id="nameFilter"
           placeholder="Search name..."
-          oninput="applyFilters">
-
+          oninput="applyFilters()">
       </div>
 
-
       <div class="filter-group">
-
-        <label for="rollFilter">
-          Roll No
-        </label>
+        <label for="rollFilter">Roll No</label>
 
         <input
           type="text"
           id="rollFilter"
           placeholder="Search roll no..."
           oninput="applyFilters()">
-
       </div>
 
-
       <div class="filter-group">
-
-        <label for="admissionFilter">
-          Admission No
-        </label>
+        <label for="admissionFilter">Admission No</label>
 
         <input
           type="text"
           id="admissionFilter"
           placeholder="Search admission no..."
           oninput="applyFilters()">
-
       </div>
 
     </div>
 
-
     <div class="stats">
 
       <div class="stat-card">
-
         <div class="stat-title">
           Total Scans
         </div>
@@ -525,12 +486,9 @@
           id="totalScans">
           0
         </div>
-
       </div>
 
-
       <div class="stat-card green">
-
         <div class="stat-title">
           Unique Students
         </div>
@@ -540,12 +498,9 @@
           id="uniqueStudents">
           0
         </div>
-
       </div>
 
-
       <div class="stat-card orange">
-
         <div class="stat-title">
           On Time
         </div>
@@ -555,12 +510,9 @@
           id="onTimeCount">
           0
         </div>
-
       </div>
 
-
       <div class="stat-card red">
-
         <div class="stat-title">
           Late
         </div>
@@ -570,16 +522,11 @@
           id="lateCount">
           0
         </div>
-
       </div>
 
     </div>
 
-
     <div class="grid">
-
-
-      <!-- CHART -->
 
       <div class="card">
 
@@ -588,17 +535,10 @@
         </h2>
 
         <div class="chart-container">
-
-          <canvas
-            id="attendanceChart">
-          </canvas>
-
+          <canvas id="attendanceChart"></canvas>
         </div>
 
       </div>
-
-
-      <!-- ATTENDANCE TABLE -->
 
       <div class="card">
 
@@ -613,81 +553,40 @@
             <thead>
 
               <tr>
-
-                <th>
-                  Name
-                </th>
-
-                <th>
-                  Admission No
-                </th>
-
-                <th>
-                  Roll No
-                </th>
-
-                <th>
-                  Class
-                </th>
-
-                <th>
-                  Date
-                </th>
-
-                <th>
-                  Time
-                </th>
-
-                <th>
-                  Status
-                </th>
-
-                <th>
-                  Email
-                </th>
-
-                <th>
-                  Email Confirmation
-                </th>
-
+                <th>Name</th>
+                <th>Admission No</th>
+                <th>Roll No</th>
+                <th>Class</th>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Status</th>
+                <th>Email</th>
+                <th>Email Confirmation</th>
               </tr>
 
             </thead>
 
-
             <tbody id="tableBody">
-
               <tr>
-
                 <td
                   colspan="9"
                   class="empty">
-
                   Loading data...
-
                 </td>
-
               </tr>
-
             </tbody>
 
           </table>
 
         </div>
 
-
         <div
           class="record-count"
           id="recordCount">
-
           Showing 0 of 0 records
-
         </div>
 
       </div>
-
-
-      <!-- PERCENTAGE TABLE -->
 
       <div class="card">
 
@@ -700,56 +599,25 @@
           <table>
 
             <thead>
-
               <tr>
-
-                <th>
-                  Name
-                </th>
-
-                <th>
-                  Admission No
-                </th>
-
-                <th>
-                  Roll No
-                </th>
-
-                <th>
-                  Total Scans
-                </th>
-
-                <th>
-                  On Time
-                </th>
-
-                <th>
-                  Late
-                </th>
-
-                <th>
-                  Attendance %
-                </th>
-
+                <th>Name</th>
+                <th>Admission No</th>
+                <th>Roll No</th>
+                <th>Total Scans</th>
+                <th>On Time</th>
+                <th>Late</th>
+                <th>Attendance %</th>
               </tr>
-
             </thead>
 
-
             <tbody id="percentageBody">
-
               <tr>
-
                 <td
                   colspan="7"
                   class="empty">
-
                   Loading data...
-
                 </td>
-
               </tr>
-
             </tbody>
 
           </table>
@@ -762,11 +630,8 @@
 
   </div>
 
-
   <div class="footer">
-
     RFID Attendance System • Live data from Google Sheet1
-
   </div>
 
 
@@ -802,14 +667,12 @@
     // =========================================================
 
     let allRows = [];
-
     let filteredRows = [];
-
     let attendanceChart = null;
 
 
     // =========================================================
-    // CONNECT LIVE DATA
+    // CONNECT TO LIVE GOOGLE SHEET
     // =========================================================
 
     function connectLiveData() {
@@ -831,41 +694,20 @@
     function loadGoogleSheet() {
 
       Papa.parse(
-
-        SHEET_CSV_URL +
-        "&_=" +
-        Date.now(),
-
+        SHEET_CSV_URL + "&_=" + Date.now(),
         {
-
           download: true,
-
           header: true,
 
-          /*
-            IMPORTANT:
-            Do not automatically remove blank CSV lines.
-          */
+          // CHANGED: keep empty CSV lines
           skipEmptyLines: false,
 
           complete: function(results) {
 
             try {
 
-              console.log(
-                "Raw CSV rows received:",
-                results.data.length
-              );
-
-              console.log(
-                "CSV parsing errors:",
-                results.errors
-              );
-
               const rows =
-                normalizeRows(
-                  results.data
-                );
+                normalizeRows(results.data);
 
               allRows = rows;
 
@@ -874,28 +716,20 @@
               applyFilters();
 
               setConnection(
-
                 "Connected to Sheet1 • " +
                 rows.length +
                 " records received",
-
                 false
-
               );
 
-            }
-
-            catch (error) {
+            } catch (error) {
 
               console.error(error);
 
               setConnection(
-
                 "Error processing Sheet1 data: " +
                 error.message,
-
                 true
-
               );
 
             }
@@ -907,17 +741,13 @@
             console.error(error);
 
             setConnection(
-
               "Unable to load Sheet1 CSV data.",
-
               true
-
             );
 
           }
 
         }
-
       );
 
     }
@@ -929,14 +759,13 @@
 
     function normalizeRows(rows) {
 
+      // CHANGED: no filter() here
       return rows.map(function(row) {
 
         return {
 
           Name:
-            String(
-              row.Name || ""
-            ).trim(),
+            String(row.Name || "").trim(),
 
           AdmissionNo:
             String(
@@ -971,8 +800,7 @@
           Status:
             String(
               row.Status || ""
-            ).trim()
-            .toUpperCase(),
+            ).trim().toUpperCase(),
 
           EmailConfirmation:
             String(
@@ -1002,115 +830,70 @@
           "classFilter"
         );
 
-
       const currentDate =
         dateFilter.value;
 
       const currentClass =
         classFilter.value;
 
-
       const dates =
-        [
-          ...new Set(
-
-            allRows
-
-              .map(function(row) {
-
-                return row.Date;
-
-              })
-
-              .filter(Boolean)
-
-          )
-
-        ]
+        [...new Set(
+          allRows
+            .map(function(row) {
+              return row.Date;
+            })
+            .filter(Boolean)
+        )]
         .sort()
         .reverse();
 
-
       const classes =
-        [
-          ...new Set(
-
-            allRows
-
-              .map(function(row) {
-
-                return row.Class;
-
-              })
-
-              .filter(Boolean)
-
-          )
-
-        ]
+        [...new Set(
+          allRows
+            .map(function(row) {
+              return row.Class;
+            })
+            .filter(Boolean)
+        )]
         .sort();
-
 
       dateFilter.innerHTML =
         '<option value="">All Dates</option>';
 
-
       dates.forEach(function(date) {
 
         const option =
-          document.createElement(
-            "option"
-          );
+          document.createElement("option");
 
-        option.value =
-          date;
+        option.value = date;
+        option.textContent = date;
 
-        option.textContent =
-          date;
-
-        dateFilter.appendChild(
-          option
-        );
+        dateFilter.appendChild(option);
 
       });
-
 
       classFilter.innerHTML =
         '<option value="">All Classes</option>';
 
-
       classes.forEach(function(className) {
 
         const option =
-          document.createElement(
-            "option"
-          );
+          document.createElement("option");
 
-        option.value =
-          className;
+        option.value = className;
+        option.textContent = className;
 
-        option.textContent =
-          className;
-
-        classFilter.appendChild(
-          option
-        );
+        classFilter.appendChild(option);
 
       });
 
-
       dateFilter.value =
-        dates.includes(
-          currentDate
-        )
+        dates.includes(currentDate)
           ? currentDate
           : "";
 
-
       classFilter.value =
-        classes.includes(
-          currentClass
-        )
+        classes.includes(currentClass)
           ? currentClass
           : "";
 
@@ -1124,115 +907,80 @@
     function applyFilters() {
 
       const date =
-        document
-          .getElementById(
-            "dateFilter"
-          )
-          .value
-          .trim();
-
+        document.getElementById(
+          "dateFilter"
+        ).value
+        .trim();
 
       const className =
-        document
-          .getElementById(
-            "classFilter"
-          )
-          .value
-          .trim()
-          .toLowerCase();
-
+        document.getElementById(
+          "classFilter"
+        ).value
+        .trim()
+        .toLowerCase();
 
       const name =
-        document
-          .getElementById(
-            "nameFilter"
-          )
-          .value
-          .trim()
-          .toLowerCase();
-
+        document.getElementById(
+          "nameFilter"
+        ).value
+        .trim()
+        .toLowerCase();
 
       const roll =
-        document
-          .getElementById(
-            "rollFilter"
-          )
-          .value
-          .trim()
-          .toLowerCase();
-
+        document.getElementById(
+          "rollFilter"
+        ).value
+        .trim()
+        .toLowerCase();
 
       const admission =
-        document
-          .getElementById(
-            "admissionFilter"
-          )
-          .value
-          .trim()
-          .toLowerCase();
+        document.getElementById(
+          "admissionFilter"
+        ).value
+        .trim()
+        .toLowerCase();
 
 
       filteredRows =
-        allRows.filter(
-          function(row) {
+        allRows.filter(function(row) {
 
-            const matchesDate =
-              !date ||
-              row.Date === date;
+          const matchesDate =
+            !date ||
+            row.Date === date;
 
+          const matchesClass =
+            !className ||
+            row.Class
+              .toLowerCase()
+              .includes(className);
 
-            const matchesClass =
-              !className ||
-              row.Class
-                .toLowerCase()
-                .includes(
-                  className
-                );
+          const matchesName =
+            !name ||
+            row.Name
+              .toLowerCase()
+              .includes(name);
 
+          const matchesRoll =
+            !roll ||
+            row.RollNo
+              .toLowerCase()
+              .includes(roll);
 
-            const matchesName =
-              !name ||
-              row.Name
-                .toLowerCase()
-                .includes(
-                  name
-                );
+          const matchesAdmission =
+            !admission ||
+            row.AdmissionNo
+              .toLowerCase()
+              .includes(admission);
 
+          return (
+            matchesDate &&
+            matchesClass &&
+            matchesName &&
+            matchesRoll &&
+            matchesAdmission
+          );
 
-            const matchesRoll =
-              !roll ||
-              row.RollNo
-                .toLowerCase()
-                .includes(
-                  roll
-                );
-
-
-            const matchesAdmission =
-              !admission ||
-              row.AdmissionNo
-                .toLowerCase()
-                .includes(
-                  admission
-                );
-
-
-            return (
-
-              matchesDate &&
-
-              matchesClass &&
-
-              matchesName &&
-
-              matchesRoll &&
-
-              matchesAdmission
-
-            );
-
-          }
-        );
+        });
 
 
       updateStats();
@@ -1247,7 +995,7 @@
 
 
     // =========================================================
-    // UPDATE STATS
+    // UPDATE STATISTICS
     // =========================================================
 
     function updateStats() {
@@ -1255,77 +1003,49 @@
       const total =
         filteredRows.length;
 
-
       const students =
         new Set(
+          filteredRows.map(function(row) {
 
-          filteredRows.map(
-            function(row) {
+            return (
+              row.AdmissionNo ||
+              row.RollNo ||
+              row.Name
+            );
 
-              return (
-
-                row.AdmissionNo ||
-
-                row.RollNo ||
-
-                row.Name
-
-              );
-
-            }
-          )
-
+          })
         ).size;
 
-
       const onTime =
-        filteredRows.filter(
-          function(row) {
+        filteredRows.filter(function(row) {
 
-            return (
-              row.Status ===
-              "ON TIME"
-            );
+          return row.Status === "ON TIME";
 
-          }
-        ).length;
-
+        }).length;
 
       const late =
-        filteredRows.filter(
-          function(row) {
+        filteredRows.filter(function(row) {
 
-            return (
-              row.Status ===
-              "LATE"
-            );
+          return row.Status === "LATE";
 
-          }
-        ).length;
+        }).length;
 
 
       document.getElementById(
         "totalScans"
-      ).textContent =
-        total;
-
+      ).textContent = total;
 
       document.getElementById(
         "uniqueStudents"
-      ).textContent =
-        students;
-
+      ).textContent = students;
 
       document.getElementById(
         "onTimeCount"
-      ).textContent =
-        onTime;
-
+      ).textContent = onTime;
 
       document.getElementById(
         "lateCount"
-      ).textContent =
-        late;
+      ).textContent = late;
 
     }
 
@@ -1341,156 +1061,92 @@
           "tableBody"
         );
 
-
       body.innerHTML = "";
 
 
-      if (
-        filteredRows.length === 0
-      ) {
+      if (filteredRows.length === 0) {
 
         body.innerHTML =
           '<tr>' +
-
           '<td colspan="9" class="empty">' +
-
           'No attendance records found.' +
-
           '</td>' +
-
           '</tr>';
 
-      }
+      } else {
 
-      else {
+        filteredRows.forEach(function(row) {
 
-        filteredRows.forEach(
-          function(row) {
-
-            const tr =
-              document.createElement(
-                "tr"
-              );
+          const tr =
+            document.createElement("tr");
 
 
-            const statusClass =
-              row.Status === "LATE"
-
-                ? "status status-late"
-
-                : "status status-on-time";
+          const statusClass =
+            row.Status === "LATE"
+              ? "status status-late"
+              : "status status-on-time";
 
 
-            const emailClass =
-              getEmailClass(
-                row.EmailConfirmation
-              );
-
-
-            tr.innerHTML =
-
-              "<td>" +
-
-              escapeHtml(
-                row.Name
-              ) +
-
-              "</td>" +
-
-
-              "<td>" +
-
-              escapeHtml(
-                row.AdmissionNo
-              ) +
-
-              "</td>" +
-
-
-              "<td>" +
-
-              escapeHtml(
-                row.RollNo
-              ) +
-
-              "</td>" +
-
-
-              "<td>" +
-
-              escapeHtml(
-                row.Class
-              ) +
-
-              "</td>" +
-
-
-              "<td>" +
-
-              escapeHtml(
-                row.Date
-              ) +
-
-              "</td>" +
-
-
-              "<td>" +
-
-              escapeHtml(
-                row.Time
-              ) +
-
-              "</td>" +
-
-
-              "<td>" +
-
-              '<span class="' +
-              statusClass +
-              '">' +
-
-              escapeHtml(
-                row.Status ||
-                "-"
-              ) +
-
-              "</span>" +
-
-              "</td>" +
-
-
-              "<td>" +
-
-              escapeHtml(
-                row.Email ||
-                "-"
-              ) +
-
-              "</td>" +
-
-
-              "<td>" +
-
-              '<span class="' +
-              emailClass +
-              '">' +
-
-              escapeHtml(
-                row.EmailConfirmation ||
-                "-"
-              ) +
-
-              "</span>" +
-
-              "</td>";
-
-
-            body.appendChild(
-              tr
+          const emailClass =
+            getEmailClass(
+              row.EmailConfirmation
             );
 
-          }
-        );
+
+          tr.innerHTML =
+
+            "<td>" +
+            escapeHtml(row.Name) +
+            "</td>" +
+
+            "<td>" +
+            escapeHtml(row.AdmissionNo) +
+            "</td>" +
+
+            "<td>" +
+            escapeHtml(row.RollNo) +
+            "</td>" +
+
+            "<td>" +
+            escapeHtml(row.Class) +
+            "</td>" +
+
+            "<td>" +
+            escapeHtml(row.Date) +
+            "</td>" +
+
+            "<td>" +
+            escapeHtml(row.Time) +
+            "</td>" +
+
+            "<td>" +
+            '<span class="' +
+            statusClass +
+            '">' +
+            escapeHtml(
+              row.Status || "-"
+            ) +
+            "</span>" +
+            "</td>" +
+
+            "<td>" +
+            escapeHtml(row.Email || "-") +
+            "</td>" +
+
+            "<td>" +
+            '<span class="' +
+            emailClass +
+            '">' +
+            escapeHtml(
+              row.EmailConfirmation || "-"
+            ) +
+            "</span>" +
+            "</td>";
+
+
+          body.appendChild(tr);
+
+        });
 
       }
 
@@ -1498,15 +1154,10 @@
       document.getElementById(
         "recordCount"
       ).textContent =
-
         "Showing " +
-
         filteredRows.length +
-
         " of " +
-
         allRows.length +
-
         " records";
 
     }
@@ -1519,63 +1170,30 @@
     function getEmailClass(value) {
 
       const text =
-        String(
-          value || ""
-        )
-        .toUpperCase()
-        .trim();
-
+        String(value || "")
+          .toUpperCase()
+          .trim();
 
       if (
-
-        text.includes(
-          "EMAIL SENT"
-        ) ||
-
-        text.includes(
-          "SENT"
-        )
-
+        text.includes("EMAIL SENT") ||
+        text.includes("SENT")
       ) {
-
         return "email-sent";
-
       }
 
-
       if (
-
-        text.includes(
-          "FAILED"
-        ) ||
-
-        text.includes(
-          "ERROR"
-        )
-
+        text.includes("FAILED") ||
+        text.includes("ERROR")
       ) {
-
         return "email-failed";
-
       }
-
 
       if (
-
-        text.includes(
-          "NOT REQUIRED"
-        ) ||
-
-        text.includes(
-          "NO EMAIL"
-        )
-
+        text.includes("NOT REQUIRED") ||
+        text.includes("NO EMAIL")
       ) {
-
         return "email-not-required";
-
       }
-
 
       return "email-other";
 
@@ -1583,7 +1201,7 @@
 
 
     // =========================================================
-    // ATTENDANCE PERCENTAGE
+    // ATTENDANCE PERCENTAGE TABLE
     // =========================================================
 
     function updatePercentageTable() {
@@ -1593,99 +1211,72 @@
           "percentageBody"
         );
 
-
       body.innerHTML = "";
 
 
       const students = {};
 
 
-      filteredRows.forEach(
-        function(row) {
+      filteredRows.forEach(function(row) {
 
-          const key =
+        const key =
+          row.AdmissionNo ||
+          row.RollNo ||
+          row.Name;
 
-            row.AdmissionNo ||
+        if (!students[key]) {
 
-            row.RollNo ||
+          students[key] = {
 
-            row.Name;
+            Name: row.Name,
 
+            AdmissionNo:
+              row.AdmissionNo,
 
-          if (
-            !students[key]
-          ) {
+            RollNo:
+              row.RollNo,
 
-            students[key] = {
+            total: 0,
 
-              Name:
-                row.Name,
+            onTime: 0,
 
-              AdmissionNo:
-                row.AdmissionNo,
+            late: 0
 
-              RollNo:
-                row.RollNo,
-
-              total: 0,
-
-              onTime: 0,
-
-              late: 0
-
-            };
-
-          }
-
-
-          students[key].total++;
-
-
-          if (
-            row.Status ===
-            "ON TIME"
-          ) {
-
-            students[key]
-              .onTime++;
-
-          }
-
-
-          if (
-            row.Status ===
-            "LATE"
-          ) {
-
-            students[key]
-              .late++;
-
-          }
+          };
 
         }
-      );
+
+
+        students[key].total++;
+
+
+        if (
+          row.Status === "ON TIME"
+        ) {
+          students[key].onTime++;
+        }
+
+
+        if (
+          row.Status === "LATE"
+        ) {
+          students[key].late++;
+        }
+
+      });
 
 
       const values =
-        Object.values(
-          students
-        );
+        Object.values(students);
 
 
-      if (
-        values.length === 0
-      ) {
+      if (values.length === 0) {
 
         body.innerHTML =
-
           '<tr>' +
-
           '<td colspan="7" class="empty">' +
-
           'No data available.' +
-
           '</td>' +
-
           '</tr>';
 
         return;
@@ -1693,103 +1284,69 @@
       }
 
 
-      values.sort(
-        function(a, b) {
+      values.sort(function(a, b) {
 
-          return a.Name.localeCompare(
-            b.Name
-          );
+        return a.Name.localeCompare(
+          b.Name
+        );
 
-        }
-      );
+      });
 
 
-      values.forEach(
-        function(student) {
+      values.forEach(function(student) {
 
-          const percentage =
-
-            student.total > 0
-
-              ? (
-                  student.onTime /
-                  student.total
-                ) * 100
-
-              : 0;
+        const percentage =
+          student.total > 0
+            ? (
+                student.onTime /
+                student.total
+              ) * 100
+            : 0;
 
 
-          const tr =
-            document.createElement(
-              "tr"
-            );
+        const tr =
+          document.createElement("tr");
 
 
-          tr.innerHTML =
+        tr.innerHTML =
 
-            "<td>" +
+          "<td>" +
+          escapeHtml(student.Name) +
+          "</td>" +
 
-            escapeHtml(
-              student.Name
-            ) +
+          "<td>" +
+          escapeHtml(
+            student.AdmissionNo
+          ) +
+          "</td>" +
 
-            "</td>" +
+          "<td>" +
+          escapeHtml(
+            student.RollNo
+          ) +
+          "</td>" +
 
+          "<td>" +
+          student.total +
+          "</td>" +
 
-            "<td>" +
+          "<td>" +
+          student.onTime +
+          "</td>" +
 
-            escapeHtml(
-              student.AdmissionNo
-            ) +
+          "<td>" +
+          student.late +
+          "</td>" +
 
-            "</td>" +
-
-
-            "<td>" +
-
-            escapeHtml(
-              student.RollNo
-            ) +
-
-            "</td>" +
-
-
-            "<td>" +
-
-            student.total +
-
-            "</td>" +
-
-
-            "<td>" +
-
-            student.onTime +
-
-            "</td>" +
+          "<td>" +
+          percentage.toFixed(1) +
+          "%" +
+          "</td>";
 
 
-            "<td>" +
+        body.appendChild(tr);
 
-            student.late +
-
-            "</td>" +
-
-
-            "<td>" +
-
-            percentage.toFixed(1) +
-
-            "%" +
-
-            "</td>";
-
-
-          body.appendChild(
-            tr
-          );
-
-        }
-      );
+      });
 
     }
 
@@ -1803,99 +1360,59 @@
       const dateMap = {};
 
 
-      filteredRows.forEach(
-        function(row) {
+      filteredRows.forEach(function(row) {
 
-          const date =
-            row.Date ||
-            "Unknown";
+        const date =
+          row.Date || "Unknown";
 
+        if (!dateMap[date]) {
 
-          if (
-            !dateMap[date]
-          ) {
-
-            dateMap[date] = {
-
-              total: 0,
-
-              onTime: 0,
-
-              late: 0
-
-            };
-
-          }
-
-
-          dateMap[date].total++;
-
-
-          if (
-            row.Status ===
-            "ON TIME"
-          ) {
-
-            dateMap[date]
-              .onTime++;
-
-          }
-
-
-          if (
-            row.Status ===
-            "LATE"
-          ) {
-
-            dateMap[date]
-              .late++;
-
-          }
+          dateMap[date] = {
+            total: 0,
+            onTime: 0,
+            late: 0
+          };
 
         }
-      );
+
+
+        dateMap[date].total++;
+
+
+        if (row.Status === "ON TIME") {
+          dateMap[date].onTime++;
+        }
+
+
+        if (row.Status === "LATE") {
+          dateMap[date].late++;
+        }
+
+      });
 
 
       const dates =
-        Object.keys(
-          dateMap
-        )
-        .sort(
+        Object.keys(dateMap).sort(
           compareDates
         );
 
 
       const totalData =
-        dates.map(
-          function(date) {
-
-            return dateMap[date]
-              .total;
-
-          }
-        );
+        dates.map(function(date) {
+          return dateMap[date].total;
+        });
 
 
       const onTimeData =
-        dates.map(
-          function(date) {
-
-            return dateMap[date]
-              .onTime;
-
-          }
-        );
+        dates.map(function(date) {
+          return dateMap[date].onTime;
+        });
 
 
       const lateData =
-        dates.map(
-          function(date) {
-
-            return dateMap[date]
-              .late;
-
-          }
-        );
+        dates.map(function(date) {
+          return dateMap[date].late;
+        });
 
 
       const canvas =
@@ -1904,72 +1421,47 @@
         );
 
 
-      if (
-        attendanceChart
-      ) {
-
+      if (attendanceChart) {
         attendanceChart.destroy();
-
       }
 
 
       attendanceChart =
         new Chart(
-
           canvas,
-
           {
-
             type: "line",
-
 
             data: {
 
               labels: dates,
 
-
               datasets: [
 
                 {
-
                   label: "Total",
-
                   data: totalData,
-
                   borderWidth: 3,
-
                   tension: 0.3
-
                 },
 
                 {
-
                   label: "On Time",
-
                   data: onTimeData,
-
                   borderWidth: 3,
-
                   tension: 0.3
-
                 },
 
                 {
-
                   label: "Late",
-
                   data: lateData,
-
                   borderWidth: 3,
-
                   tension: 0.3
-
                 }
 
               ]
 
             },
-
 
             options: {
 
@@ -1977,39 +1469,26 @@
 
               maintainAspectRatio: false,
 
-
               interaction: {
-
                 mode: "index",
-
                 intersect: false
-
               },
-
 
               plugins: {
 
                 legend: {
-
                   display: true
-
                 }
 
               },
 
-
               scales: {
 
                 y: {
-
                   beginAtZero: true,
-
                   ticks: {
-
                     precision: 0
-
                   }
-
                 }
 
               }
@@ -2017,7 +1496,6 @@
             }
 
           }
-
         );
 
     }
@@ -2035,16 +1513,12 @@
       const db =
         parseDate(b);
 
-
       if (
         da &&
         db
       ) {
-
         return da - db;
-
       }
-
 
       return String(a).localeCompare(
         String(b)
@@ -2056,68 +1530,40 @@
     function parseDate(value) {
 
       const text =
-        String(
-          value || ""
-        ).trim();
+        String(value || "").trim();
 
 
       // dd/MM/yyyy
-
       let match =
         text.match(
           /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
         );
 
 
-      if (
-        match
-      ) {
+      if (match) {
 
         return new Date(
-
-          Number(
-            match[3]
-          ),
-
-          Number(
-            match[2]
-          ) - 1,
-
-          Number(
-            match[1]
-          )
-
+          Number(match[3]),
+          Number(match[2]) - 1,
+          Number(match[1])
         );
 
       }
 
 
       // yyyy-MM-dd
-
       match =
         text.match(
           /^(\d{4})-(\d{1,2})-(\d{1,2})$/
         );
 
 
-      if (
-        match
-      ) {
+      if (match) {
 
         return new Date(
-
-          Number(
-            match[1]
-          ),
-
-          Number(
-            match[2]
-          ) - 1,
-
-          Number(
-            match[3]
-          )
-
+          Number(match[1]),
+          Number(match[2]) - 1,
+          Number(match[3])
         );
 
       }
@@ -2129,7 +1575,7 @@
 
 
     // =========================================================
-    // LOAD CSV FILE
+    // LOAD CSV FILE MANUALLY
     // =========================================================
 
     function loadCSVFile(event) {
@@ -2137,36 +1583,22 @@
       const file =
         event.target.files[0];
 
-
       if (!file) {
         return;
       }
 
 
       Papa.parse(
-
         file,
-
         {
-
           header: true,
 
+          // CHANGED: keep empty CSV lines
           skipEmptyLines: false,
 
+          complete: function(results) {
 
-          complete:
-            function(results) {
-
-              console.log(
-                "CSV file rows received:",
-                results.data.length
-              );
-
-              console.log(
-                "CSV file parsing errors:",
-                results.errors
-              );
-
+            try {
 
               allRows =
                 normalizeRows(
@@ -2180,36 +1612,37 @@
 
 
               setConnection(
-
                 "Loaded " +
                 allRows.length +
                 " records from CSV file.",
-
                 false
-
               );
 
-            },
-
-
-          error:
-            function(error) {
+            } catch (error) {
 
               console.error(error);
 
-
               setConnection(
-
-                "Could not load CSV file.",
-
+                "Could not process CSV file.",
                 true
-
               );
 
             }
 
-        }
+          },
 
+          error: function(error) {
+
+            console.error(error);
+
+            setConnection(
+              "Could not load CSV file.",
+              true
+            );
+
+          }
+
+        }
       );
 
     }
@@ -2239,21 +1672,17 @@
         "dateFilter"
       ).value = "";
 
-
       document.getElementById(
         "classFilter"
       ).value = "";
-
 
       document.getElementById(
         "nameFilter"
       ).value = "";
 
-
       document.getElementById(
         "rollFilter"
       ).value = "";
-
 
       document.getElementById(
         "admissionFilter"
@@ -2279,7 +1708,6 @@
           "connectionStatus"
         );
 
-
       const text =
         document.getElementById(
           "connectionText"
@@ -2290,67 +1718,33 @@
         message;
 
 
-      if (
-        isError
-      ) {
-
-        box.classList.add(
-          "error"
-        );
-
-      }
-
-      else {
-
-        box.classList.remove(
-          "error"
-        );
-
+      if (isError) {
+        box.classList.add("error");
+      } else {
+        box.classList.remove("error");
       }
 
     }
 
 
     // =========================================================
-    // HTML ESCAPE
+    // HTML ESCAPING
     // =========================================================
 
     function escapeHtml(value) {
 
-      return String(
-        value || ""
-      )
-
-      .replace(
-        /&/g,
-        "&amp;"
-      )
-
-      .replace(
-        /</g,
-        "&lt;"
-      )
-
-      .replace(
-        />/g,
-        "&gt;"
-      )
-
-      .replace(
-        /"/g,
-        "&quot;"
-      )
-
-      .replace(
-        /'/g,
-        "&#039;"
-      );
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
     }
 
 
     // =========================================================
-    // START
+    // AUTO LOAD
     // =========================================================
 
     window.addEventListener(
@@ -2358,7 +1752,6 @@
       function() {
 
         connectLiveData();
-
 
         setInterval(
           loadGoogleSheet,
