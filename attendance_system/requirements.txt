@@ -1,2 +1,0 @@
-# Optional: required only for logger.py USB CSV logging.
-pyserial>=3.5
