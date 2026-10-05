@@ -699,7 +699,7 @@
           download: true,
           header: true,
 
-          // CHANGED: keep empty CSV lines
+          // ONLY CHANGE: do not skip empty CSV lines
           skipEmptyLines: false,
 
           complete: function(results) {
@@ -759,7 +759,7 @@
 
     function normalizeRows(rows) {
 
-      // CHANGED: no filter() here
+      // ONLY CHANGE: removed the filter that could remove a row
       return rows.map(function(row) {
 
         return {
@@ -1592,42 +1592,27 @@
         file,
         {
           header: true,
-
-          // CHANGED: keep empty CSV lines
-          skipEmptyLines: false,
+          skipEmptyLines: true,
 
           complete: function(results) {
 
-            try {
-
-              allRows =
-                normalizeRows(
-                  results.data
-                );
-
-
-              updateFilters();
-
-              applyFilters();
-
-
-              setConnection(
-                "Loaded " +
-                allRows.length +
-                " records from CSV file.",
-                false
+            allRows =
+              normalizeRows(
+                results.data
               );
 
-            } catch (error) {
 
-              console.error(error);
+            updateFilters();
 
-              setConnection(
-                "Could not process CSV file.",
-                true
-              );
+            applyFilters();
 
-            }
+
+            setConnection(
+              "Loaded " +
+              allRows.length +
+              " records from CSV file.",
+              false
+            );
 
           },
 
