@@ -34,6 +34,7 @@
       color: #1E2A38;
       font-family: 'IBM Plex Sans', sans-serif;
       line-height: 1.5;
+      animation: pageIn 0.7s ease;
     }
 
     .wrap {
@@ -95,10 +96,6 @@
         transform: scale(1);
         opacity: 1;
       }
-    }
-
-    body {
-      animation: pageIn 0.7s ease;
     }
 
     /* =========================
@@ -457,6 +454,7 @@
       .chart-holder {
         height: 250px;
       }
+
     }
 
   </style>
@@ -468,9 +466,7 @@
 
 <div class="wrap">
 
-  <!-- =========================
-       HEADER
-  ========================= -->
+  <!-- HEADER -->
 
   <header>
 
@@ -488,9 +484,7 @@
   </header>
 
 
-  <!-- =========================
-       CSV UPLOAD
-  ========================= -->
+  <!-- CSV UPLOAD -->
 
   <div class="upload-row">
 
@@ -517,9 +511,7 @@
   </div>
 
 
-  <!-- =========================
-       GOOGLE SHEETS
-  ========================= -->
+  <!-- GOOGLE SHEETS -->
 
   <div
     class="panel"
@@ -559,9 +551,7 @@
   </div>
 
 
-  <!-- =========================
-       EMPTY STATE
-  ========================= -->
+  <!-- EMPTY STATE -->
 
   <div
     class="empty-state"
@@ -579,9 +569,7 @@
   </div>
 
 
-  <!-- =========================
-       DASHBOARD
-  ========================= -->
+  <!-- DASHBOARD -->
 
   <div
     id="dashboard"
@@ -658,9 +646,7 @@
     </div>
 
 
-    <!-- =========================
-         DAILY CHART
-    ========================= -->
+    <!-- DAILY CHART -->
 
     <div class="panel">
 
@@ -677,9 +663,7 @@
     </div>
 
 
-    <!-- =========================
-         ATTENDANCE PERCENTAGE
-    ========================= -->
+    <!-- ATTENDANCE PERCENTAGE -->
 
     <div class="panel">
 
@@ -712,9 +696,7 @@
     </div>
 
 
-    <!-- =========================
-         ATTENDANCE RECORDS
-    ========================= -->
+    <!-- ATTENDANCE RECORDS -->
 
     <div class="panel">
 
@@ -810,27 +792,24 @@ const REFRESH_INTERVAL =
 
 
 /* =====================================================
-   GOOGLE SHEETS URL
+   GOOGLE SHEETS URLS
 ===================================================== */
 
 /*
-   This opens the actual spreadsheet.
+   URL used by the OPEN GOOGLE SHEETS button.
 */
-
 const GOOGLE_SHEET_URL =
   "https://docs.google.com/spreadsheets/d/" +
   SHEET_ID +
-  "/edit?gid=0#gid=0";
+  "/edit";
 
 
 /*
-   This retrieves the Attendance sheet as CSV.
+   URL used to READ the Attendance tab.
 
-   IMPORTANT:
-   The spreadsheet/tab must be accessible to the
-   browser for this direct CSV method.
+   This requires the spreadsheet to be accessible
+   to the browser.
 */
-
 const SHEET_URL =
   "https://docs.google.com/spreadsheets/d/" +
   SHEET_ID +
@@ -848,27 +827,26 @@ let dailyChart = null;
 
 
 /* =====================================================
-   ELEMENT HELPERS
+   ELEMENT HELPER
 ===================================================== */
 
 function $(id) {
-
   return document.getElementById(id);
-
 }
 
 
 /* =====================================================
-   OPEN GOOGLE SHEETS BUTTON
+   OPEN GOOGLE SHEETS
 ===================================================== */
 
 $("openSheetBtn").addEventListener(
   "click",
-  function() {
+  function () {
 
     window.open(
       GOOGLE_SHEET_URL,
-      "_blank"
+      "_blank",
+      "noopener,noreferrer"
     );
 
   }
@@ -876,12 +854,12 @@ $("openSheetBtn").addEventListener(
 
 
 /* =====================================================
-   CONNECT LIVE DATA BUTTON
+   CONNECT LIVE DATA
 ===================================================== */
 
 $("connectBtn").addEventListener(
   "click",
-  function() {
+  function () {
 
     loadAttendance();
 
@@ -890,12 +868,12 @@ $("connectBtn").addEventListener(
 
 
 /* =====================================================
-   CSV FILE BUTTON
+   CSV LOAD BUTTON
 ===================================================== */
 
 $("loadBtn").addEventListener(
   "click",
-  function() {
+  function () {
 
     $("fileInput").click();
 
@@ -909,26 +887,30 @@ $("loadBtn").addEventListener(
 
 $("fileInput").addEventListener(
   "change",
-  function(event) {
+  function (event) {
 
     const file =
       event.target.files[0];
 
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     const reader =
       new FileReader();
 
     reader.onload =
-      function(e) {
+      function (e) {
 
         try {
 
-          attendanceData =
-            parseCSV(e.target.result);
+          const parsed =
+            parseCSV(
+              e.target.result
+            );
 
           if (
-            attendanceData.length === 0
+            parsed.length === 0
           ) {
 
             $("fileStatus").textContent =
@@ -936,6 +918,9 @@ $("fileInput").addEventListener(
 
             return;
           }
+
+          attendanceData =
+            parsed;
 
           $("fileStatus").textContent =
             file.name +
@@ -945,7 +930,10 @@ $("fileInput").addEventListener(
 
         } catch (error) {
 
-          console.error(error);
+          console.error(
+            "CSV error:",
+            error
+          );
 
           $("fileStatus").textContent =
             "Unable to read CSV file.";
@@ -970,16 +958,27 @@ async function loadAttendance() {
     $("liveStatus");
 
   status.innerHTML =
-    '<span class="live-dot"></span>Connecting to Google Sheets...';
+    '<span class="live-dot"></span>' +
+    "Connecting to Google Sheets...";
+
 
   try {
 
+    const url =
+      SHEET_URL +
+      "&cache=" +
+      Date.now();
+
+
     const response =
       await fetch(
-        SHEET_URL +
-        "&cache=" +
-        Date.now()
+        url,
+        {
+          method: "GET",
+          cache: "no-store"
+        }
       );
+
 
     if (!response.ok) {
 
@@ -990,31 +989,44 @@ async function loadAttendance() {
 
     }
 
+
     const csvText =
       await response.text();
 
 
+    console.log(
+      "Google Sheets response:",
+      csvText.substring(0, 300)
+    );
+
+
+    /*
+       If Google sends an HTML login/access page
+       instead of CSV, the sheet is not publicly
+       accessible to the dashboard.
+    */
+
     if (
-      csvText.includes("<!DOCTYPE html>")
+      csvText
+        .toLowerCase()
+        .includes("<html")
     ) {
 
       throw new Error(
-        "Google returned HTML instead of CSV."
+        "Google Sheets returned an access page. Make the spreadsheet available to anyone with the link as Viewer."
       );
 
     }
 
 
     const data =
-      parseCSV(csvText);
-
-
-    attendanceData =
-      data;
+      parseCSV(
+        csvText
+      );
 
 
     if (
-      attendanceData.length === 0
+      data.length === 0
     ) {
 
       $("emptyState").style.display =
@@ -1029,6 +1041,10 @@ async function loadAttendance() {
       return;
 
     }
+
+
+    attendanceData =
+      data;
 
 
     processAttendanceData();
@@ -1048,6 +1064,7 @@ async function loadAttendance() {
       error
     );
 
+
     status.textContent =
       "Unable to load Google Sheets: " +
       error.message;
@@ -1058,7 +1075,7 @@ async function loadAttendance() {
 
 
 /* =====================================================
-   PROCESS DATA
+   PROCESS ATTENDANCE DATA
 ===================================================== */
 
 function processAttendanceData() {
@@ -1116,6 +1133,10 @@ function parseCSV(text) {
       text[i + 1];
 
 
+    /*
+       Escaped quotation mark
+    */
+
     if (
       char === '"' &&
       insideQuotes &&
@@ -1131,6 +1152,10 @@ function parseCSV(text) {
     }
 
 
+    /*
+       Start/end quotation
+    */
+
     if (char === '"') {
 
       insideQuotes =
@@ -1140,6 +1165,10 @@ function parseCSV(text) {
 
     }
 
+
+    /*
+       Column separator
+    */
 
     if (
       char === "," &&
@@ -1154,6 +1183,10 @@ function parseCSV(text) {
 
     }
 
+
+    /*
+       New row
+    */
 
     if (
       (char === "\n" ||
@@ -1197,6 +1230,10 @@ function parseCSV(text) {
   }
 
 
+  /*
+     Last row
+  */
+
   if (
     value.length > 0 ||
     row.length > 0
@@ -1220,34 +1257,48 @@ function parseCSV(text) {
 
   const headers =
     rows[0].map(
-      h =>
-        String(h).trim()
+      function (header) {
+
+        return String(
+          header
+        ).trim();
+
+      }
     );
 
 
   return rows
     .slice(1)
     .filter(
-      row =>
-        row.some(
-          value =>
-            String(value).trim() !== ""
-        )
+      function (currentRow) {
+
+        return currentRow.some(
+          function (cell) {
+
+            return String(
+              cell
+            ).trim() !== "";
+
+          }
+        );
+
+      }
     )
     .map(
-      row => {
+      function (currentRow) {
 
         const item = {};
 
 
         headers.forEach(
-          (
+          function (
             header,
             index
-          ) => {
+          ) {
 
             item[header] =
-              row[index] || "";
+              currentRow[index] ||
+              "";
 
           }
         );
@@ -1270,7 +1321,9 @@ function getFilterValue(id) {
   const element =
     $(id);
 
-  if (!element) return "";
+  if (!element) {
+    return "";
+  }
 
   return String(
     element.value || ""
@@ -1314,46 +1367,46 @@ function getFilteredData() {
 
 
   return attendanceData.filter(
-    row => {
+    function (row) {
 
       const rowDate =
         String(
           row.Date || ""
         )
-        .trim()
-        .toLowerCase();
+          .trim()
+          .toLowerCase();
 
 
       const rowClass =
         String(
           row.Class || ""
         )
-        .trim()
-        .toLowerCase();
+          .trim()
+          .toLowerCase();
 
 
       const rowName =
         String(
           row.Name || ""
         )
-        .trim()
-        .toLowerCase();
+          .trim()
+          .toLowerCase();
 
 
       const rowRoll =
         String(
           row.RollNo || ""
         )
-        .trim()
-        .toLowerCase();
+          .trim()
+          .toLowerCase();
 
 
       const rowAdmission =
         String(
           row.AdmissionNo || ""
         )
-        .trim()
-        .toLowerCase();
+          .trim()
+          .toLowerCase();
 
 
       if (
@@ -1429,8 +1482,10 @@ function populateFilters() {
     $("dateFilter");
 
 
-  if (!classSelect ||
-      !dateSelect) {
+  if (
+    !classSelect ||
+    !dateSelect
+  ) {
 
     return;
 
@@ -1449,15 +1504,18 @@ function populateFilters() {
       ...new Set(
         attendanceData
           .map(
-            row =>
-              String(
+            function (row) {
+
+              return String(
                 row.Class || ""
-              ).trim()
+              ).trim();
+
+            }
           )
           .filter(Boolean)
       )
     ]
-    .sort();
+      .sort();
 
 
   const dates =
@@ -1465,15 +1523,18 @@ function populateFilters() {
       ...new Set(
         attendanceData
           .map(
-            row =>
-              String(
+            function (row) {
+
+              return String(
                 row.Date || ""
-              ).trim()
+              ).trim();
+
+            }
           )
           .filter(Boolean)
       )
     ]
-    .sort();
+      .sort();
 
 
   classSelect.innerHTML =
@@ -1481,7 +1542,7 @@ function populateFilters() {
 
 
   classes.forEach(
-    studentClass => {
+    function (studentClass) {
 
       const option =
         document.createElement(
@@ -1507,7 +1568,7 @@ function populateFilters() {
 
 
   dates.forEach(
-    date => {
+    function (date) {
 
       const option =
         document.createElement(
@@ -1547,18 +1608,21 @@ function renderAttendance() {
     $("tableBody");
 
 
-  if (!tbody) return;
+  if (!tbody) {
+    return;
+  }
 
 
   const filtered =
     getFilteredData();
 
 
-  tbody.innerHTML = "";
+  tbody.innerHTML =
+    "";
 
 
   filtered.forEach(
-    row => {
+    function (row) {
 
       const tr =
         document.createElement(
@@ -1584,7 +1648,7 @@ function renderAttendance() {
 
 
       values.forEach(
-        value => {
+        function (value) {
 
           const td =
             document.createElement(
@@ -1594,7 +1658,9 @@ function renderAttendance() {
           td.textContent =
             value;
 
-          tr.appendChild(td);
+          tr.appendChild(
+            td
+          );
 
         }
       );
@@ -1610,8 +1676,8 @@ function renderAttendance() {
         String(
           row.Status || ""
         )
-        .trim()
-        .toUpperCase();
+          .trim()
+          .toUpperCase();
 
 
       const pill =
@@ -1682,37 +1748,46 @@ function updateStatistics() {
 
   const late =
     filtered.filter(
-      row =>
-        String(
+      function (row) {
+
+        return String(
           row.Status || ""
         )
-        .trim()
-        .toUpperCase() ===
-        "LATE"
+          .trim()
+          .toUpperCase() ===
+          "LATE";
+
+      }
     ).length;
 
 
   const onTime =
     filtered.filter(
-      row =>
-        String(
+      function (row) {
+
+        return String(
           row.Status || ""
         )
-        .trim()
-        .toUpperCase() ===
-        "ON TIME"
+          .trim()
+          .toUpperCase() ===
+          "ON TIME";
+
+      }
     ).length;
 
 
   const students =
     new Set(
       filtered.map(
-        row =>
-          String(
+        function (row) {
+
+          return String(
             row.AdmissionNo ||
             row.Name ||
             ""
-          ).trim()
+          ).trim();
+
+        }
       )
     );
 
@@ -1720,14 +1795,11 @@ function updateStatistics() {
   $("totalScans").textContent =
     total;
 
-
   $("uniqueStudents").textContent =
     students.size;
 
-
   $("lateCount").textContent =
     late;
-
 
   $("onTimeCount").textContent =
     onTime;
@@ -1745,7 +1817,9 @@ function renderDailyChart() {
     $("dailyChart");
 
 
-  if (!canvas) return;
+  if (!canvas) {
+    return;
+  }
 
 
   const filtered =
@@ -1756,7 +1830,7 @@ function renderDailyChart() {
 
 
   filtered.forEach(
-    row => {
+    function (row) {
 
       const date =
         String(
@@ -1764,7 +1838,9 @@ function renderDailyChart() {
         ).trim();
 
 
-      if (!date) return;
+      if (!date) {
+        return;
+      }
 
 
       if (
@@ -1791,14 +1867,20 @@ function renderDailyChart() {
 
   const counts =
     dates.map(
-      date =>
-        dailyCounts[date]
+      function (date) {
+
+        return dailyCounts[date];
+
+      }
     );
 
 
   if (dailyChart) {
 
     dailyChart.destroy();
+
+    dailyChart =
+      null;
 
   }
 
@@ -1886,17 +1968,20 @@ function renderAttendancePercentage() {
     $("percentTableBody");
 
 
-  if (!tbody) return;
+  if (!tbody) {
+    return;
+  }
 
 
-  tbody.innerHTML = "";
+  tbody.innerHTML =
+    "";
 
 
   const students = {};
 
 
   attendanceData.forEach(
-    row => {
+    function (row) {
 
       const admission =
         String(
@@ -1915,7 +2000,9 @@ function renderAttendancePercentage() {
         name;
 
 
-      if (!key) return;
+      if (!key) {
+        return;
+      }
 
 
       if (
@@ -1960,10 +2047,13 @@ function renderAttendancePercentage() {
     new Set(
       attendanceData
         .map(
-          row =>
-            String(
+          function (row) {
+
+            return String(
               row.Date || ""
-            ).trim()
+            ).trim();
+
+          }
         )
         .filter(Boolean)
     );
@@ -1976,7 +2066,7 @@ function renderAttendancePercentage() {
   Object.values(
     students
   ).forEach(
-    student => {
+    function (student) {
 
       const tr =
         document.createElement(
@@ -2023,7 +2113,7 @@ function renderAttendancePercentage() {
 
 
       values.forEach(
-        value => {
+        function (value) {
 
           const td =
             document.createElement(
@@ -2033,7 +2123,9 @@ function renderAttendancePercentage() {
           td.textContent =
             value;
 
-          tr.appendChild(td);
+          tr.appendChild(
+            td
+          );
 
         }
       );
@@ -2050,7 +2142,7 @@ function renderAttendancePercentage() {
 
 
 /* =====================================================
-   FILTER EVENTS
+   REFRESH DASHBOARD
 ===================================================== */
 
 function refreshDashboard() {
@@ -2066,6 +2158,10 @@ function refreshDashboard() {
 }
 
 
+/* =====================================================
+   FILTER EVENTS
+===================================================== */
+
 [
   "dateFilter",
   "classFilter",
@@ -2073,13 +2169,15 @@ function refreshDashboard() {
   "rollFilter",
   "admFilter"
 ].forEach(
-  id => {
+  function (id) {
 
     const element =
       $(id);
 
 
-    if (!element) return;
+    if (!element) {
+      return;
+    }
 
 
     element.addEventListener(
@@ -2098,31 +2196,16 @@ function refreshDashboard() {
 
 
 /* =====================================================
-   INITIAL LOAD
-===================================================== */
-
-document.addEventListener(
-  "DOMContentLoaded",
-  function() {
-
-    /*
-      We don't automatically connect immediately.
-      The user can click Connect Live Data.
-    */
-
-    $("liveStatus").textContent =
-      "Click \"Connect Live Data\" to load the latest attendance.";
-
-  }
-);
-
-
-/* =====================================================
    AUTO REFRESH
 ===================================================== */
 
 setInterval(
-  function() {
+  function () {
+
+    /*
+       Only refresh if the dashboard has
+       already successfully connected once.
+    */
 
     if (
       attendanceData.length > 0
