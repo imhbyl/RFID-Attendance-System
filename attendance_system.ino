@@ -1,21 +1,24 @@
 /*
-  RFID Attendance System
-  -----------------------
-  Arduino UNO + MFRC522 + DS1307 RTC + 16x2 LCD + LEDs + buzzer
+  RFID ATTENDANCE SYSTEM - UNO
+  =============================
 
-  Features:
-    - Master Card menu for adding/deleting users (no reprogramming needed)
-    - Users stored in EEPROM (persist across power loss)
-    - Late-arrival detection against a configurable cutoff time
-    - Duplicate-scan cooldown
-    - CSV output over Serial: Name,AdmissionNo,RollNo,Class,ParentEmail,UID,Date,Time,Status
+  UNO:
+    MFRC522 RFID
+    DS1307 RTC
+    16x2 parallel LCD
+    Green LED
+    Red LED
+    Buzzer
+    EEPROM student database
+    ESP32 serial connection
 
-  Master Card usage:
-    Tap Master Card -> type A (add) or D (delete) in Serial Monitor ->
-    tap the target card -> for "add", type Name,AdmissionNo,RollNo,Class,ParentEmail
+  RFID ONLY
+  No PIN
+  No keypad
 
-  Startup:
-    Type RESET within 10 seconds of power-on to erase all stored users.
+  Attendance data sent to ESP32:
+
+  Name,AdmissionNo,RollNo,Class,ParentEmail,UID,Date,Time,Status
 */
 
 #include <SPI.h>
@@ -28,567 +31,1648 @@
 #include <string.h>
 #include <ctype.h>
 
-// ---- RFID reader ----
+// ======================================================
+// RFID
+// ======================================================
+
 #define SS_PIN 10
 #define RST_PIN 9
+
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 
-// ---- Link to ESP32 (D2 = RX, A3 = TX — see wiring notes in the ESP32 sketch) ----
-SoftwareSerial espSerial(2, A3);
+// ======================================================
+// ESP32 SERIAL
+// ======================================================
 
-// ---- RTC ----
+#define UNO_RX 2
+#define UNO_TX A3
+
+SoftwareSerial espSerial(UNO_RX, UNO_TX);
+
+// ======================================================
+// RTC + LCD
+// ======================================================
+
 RTC_DS1307 rtc;
 
-// ---- LCD (RS, E, D4, D5, D6, D7) ----
-LiquidCrystal lcd(8, 7, 6, 5, 4, 3);
+LiquidCrystal lcd(
+  8,  // RS
+  7,  // E
+  6,  // D4
+  5,  // D5
+  4,  // D6
+  3   // D7
+);
 
-// ---- LEDs + buzzer ----
-const int GREEN_LED = A0;
-const int RED_LED   = A1;
-const int BUZZER    = A2;
+// ======================================================
+// OUTPUTS
+// ======================================================
 
-// ---- Master Card (admin key, found via the UID-finder sketch) ----
-byte MASTER_UID[4] = {0xAE, 0x52, 0x99, 0x04};
+#define GREEN_LED A0
+#define RED_LED   A1
+#define BUZZER    A2
 
-// ---- Late cutoff (24-hour format) ----
-const int LATE_HOUR   = 9;
-const int LATE_MINUTE = 0;
+// ======================================================
+// MASTER CARD
+// ======================================================
 
-// ---- User storage (EEPROM-backed) ----
+byte MASTER_UID[4] = {
+  0xAE,
+  0x52,
+  0x99,
+  0x04
+};
+
+// ======================================================
+// LATE TIME
+// ======================================================
+
+#define LATE_HOUR   7
+#define LATE_MINUTE 30
+
+// ======================================================
+// EEPROM DATABASE
+// ======================================================
+
 struct User {
+
   byte uid[4];
+
   char name[13];
+
   char admissionNo[6];
+
   char rollNo[3];
+
   char className[5];
+
   char parentEmail[36];
 };
 
-const int MAX_USERS = 4;
-const byte EEPROM_LAYOUT_VERSION = 4;   // bump this any time the User struct changes
-const int EEPROM_VERSION_ADDR = 0;
-const int EEPROM_COUNT_ADDR = 1;
-const int EEPROM_USERS_START = 2;
-const int USER_RECORD_SIZE = sizeof(User);
+#define MAX_USERS 4
 
-User users[MAX_USERS];
-unsigned long lastSeen[MAX_USERS];   // runtime only, not persisted
-int userCount = 0;
+/*
+  Changed because the old EEPROM structure contained
+  the PIN field.
+*/
+#define EEPROM_LAYOUT_VERSION 6
 
-const unsigned long COOLDOWN_MS = 10000;
+#define EEPROM_VERSION_ADDR 0
+#define EEPROM_COUNT_ADDR   1
+#define EEPROM_USERS_START  2
 
+#define USER_RECORD_SIZE sizeof(User)
 
-// ---------------------------------------------------
-// EEPROM helpers
-// ---------------------------------------------------
+User currentUser;
 
-void loadUsersFromEEPROM() {
-  byte storedVersion = EEPROM.read(EEPROM_VERSION_ADDR);
+int currentUserIndex = -1;
 
-  if (storedVersion != EEPROM_LAYOUT_VERSION) {
-    // Data was saved under an old/different format — wipe it instead of
-    // reading it as garbage.
-    userCount = 0;
-    EEPROM.write(EEPROM_VERSION_ADDR, EEPROM_LAYOUT_VERSION);
-    EEPROM.write(EEPROM_COUNT_ADDR, 0);
-    return;
-  }
+byte userCount = 0;
 
-  userCount = EEPROM.read(EEPROM_COUNT_ADDR);
-  if (userCount < 0 || userCount > MAX_USERS) userCount = 0;
+// ======================================================
+// COOLDOWN
+// ======================================================
 
-  for (int i = 0; i < userCount; i++) {
-    EEPROM.get(EEPROM_USERS_START + (i * USER_RECORD_SIZE), users[i]);
-    lastSeen[i] = 0;
-  }
+unsigned long lastSeen[MAX_USERS];
+
+#define COOLDOWN_MS 10000UL
+
+// ======================================================
+// FUNCTION DECLARATIONS
+// ======================================================
+
+bool sameUID(byte* a, byte* b);
+
+int findUser(byte* uid);
+
+int findUserByAdmission(const char* admission);
+
+void loadUser(int index);
+
+void saveUser(int index, User &u);
+
+void deleteUser(int index);
+
+int readSerialLine(char* buf, int maxLen);
+
+void enrollNewUser(byte* uid);
+
+void showAttendance(
+  User &user,
+  DateTime now,
+  bool isLate
+);
+
+void sendAttendanceToESP32(
+  User &user,
+  byte* uid,
+  DateTime now,
+  bool isLate
+);
+
+// ======================================================
+// LOAD USER
+// ======================================================
+
+void loadUser(int index) {
+
+  EEPROM.get(
+    EEPROM_USERS_START +
+    ((long)index * USER_RECORD_SIZE),
+    currentUser
+  );
+
+  currentUserIndex = index;
 }
 
-void saveUserToEEPROM(int index, User &u) {
-  EEPROM.put(EEPROM_USERS_START + (index * USER_RECORD_SIZE), u);
-  EEPROM.write(EEPROM_COUNT_ADDR, userCount);
+// ======================================================
+// SAVE USER
+// ======================================================
+
+void saveUser(int index, User &u) {
+
+  EEPROM.put(
+    EEPROM_USERS_START +
+    ((long)index * USER_RECORD_SIZE),
+    u
+  );
 }
 
-
-int readSerialLine(char* buf, int maxLen) {
-  int len = Serial.readBytesUntil('\n', buf, maxLen - 1);
-  buf[len] = '\0';
-  while (len > 0 && (buf[len - 1] == '\r' || buf[len - 1] == ' ')) {
-    buf[--len] = '\0';
-  }
-  return len;
-}
-
-
-// ---------------------------------------------------
-// UID matching
-// ---------------------------------------------------
+// ======================================================
+// COMPARE UID
+// ======================================================
 
 bool sameUID(byte* a, byte* b) {
+
   for (byte i = 0; i < 4; i++) {
-    if (a[i] != b[i]) return false;
+
+    if (a[i] != b[i])
+      return false;
   }
+
   return true;
 }
 
+// ======================================================
+// FIND USER BY UID
+// ======================================================
+
 int findUser(byte* uid) {
-  for (int i = 0; i < userCount; i++) {
-    if (sameUID(uid, users[i].uid)) return i;
+
+  User temp;
+
+  for (byte i = 0; i < userCount; i++) {
+
+    EEPROM.get(
+      EEPROM_USERS_START +
+      ((long)i * USER_RECORD_SIZE),
+      temp
+    );
+
+    if (sameUID(uid, temp.uid)) {
+
+      return i;
+    }
   }
+
   return -1;
 }
 
-void deleteUser(int index) {
-  for (int i = index; i < userCount - 1; i++) {
-    users[i] = users[i + 1];
-    lastSeen[i] = lastSeen[i + 1];
-    saveUserToEEPROM(i, users[i]);
+// ======================================================
+// FIND USER BY ADMISSION NUMBER
+// ======================================================
+
+int findUserByAdmission(
+  const char* admission
+) {
+
+  User temp;
+
+  for (byte i = 0; i < userCount; i++) {
+
+    EEPROM.get(
+      EEPROM_USERS_START +
+      ((long)i * USER_RECORD_SIZE),
+      temp
+    );
+
+    if (
+      strcmp(
+        temp.admissionNo,
+        admission
+      ) == 0
+    ) {
+
+      return i;
+    }
   }
-  userCount--;
-  EEPROM.write(EEPROM_COUNT_ADDR, userCount);
+
+  return -1;
 }
 
+// ======================================================
+// DELETE USER
+// ======================================================
 
-// ---------------------------------------------------
-// Enrollment
-// ---------------------------------------------------
+void deleteUser(int index) {
+
+  User temp;
+
+  for (
+    int i = index;
+    i < userCount - 1;
+    i++
+  ) {
+
+    EEPROM.get(
+      EEPROM_USERS_START +
+      ((long)(i + 1) * USER_RECORD_SIZE),
+      temp
+    );
+
+    EEPROM.put(
+      EEPROM_USERS_START +
+      ((long)i * USER_RECORD_SIZE),
+      temp
+    );
+
+    lastSeen[i] = lastSeen[i + 1];
+  }
+
+  if (userCount > 0)
+    userCount--;
+
+  EEPROM.update(
+    EEPROM_COUNT_ADDR,
+    userCount
+  );
+
+  currentUserIndex = -1;
+}
+
+// ======================================================
+// READ SERIAL LINE
+// ======================================================
+
+int readSerialLine(
+  char* buf,
+  int maxLen
+) {
+
+  int len =
+    Serial.readBytesUntil(
+      '\n',
+      buf,
+      maxLen - 1
+    );
+
+  buf[len] = '\0';
+
+  while (
+    len > 0 &&
+    (
+      buf[len - 1] == '\r' ||
+      buf[len - 1] == ' '
+    )
+  ) {
+
+    buf[--len] = '\0';
+  }
+
+  return len;
+}
+
+// ======================================================
+// REGISTER NEW STUDENT
+// ======================================================
 
 void enrollNewUser(byte* uid) {
+
   if (userCount >= MAX_USERS) {
+
     lcd.clear();
-    lcd.print("Storage FULL");
-    Serial.println("ERROR: No space for more users.");
+    lcd.print(F("Storage FULL"));
+
+    Serial.println(
+      F("ERROR: No space for more users.")
+    );
+
     delay(2000);
+
     return;
   }
 
   if (findUser(uid) != -1) {
+
     lcd.clear();
-    lcd.print("Already exists");
+    lcd.print(F("Already exists"));
+
+    Serial.println(
+      F("ERROR: Card already registered.")
+    );
+
     delay(1500);
+
     return;
   }
 
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Check Serial");
-  lcd.setCursor(0, 1);
-  lcd.print("Monitor now...");
+  lcd.print(F("Check Serial"));
 
-  Serial.println("Type: Name,AdmissionNo,RollNo,Class,ParentEmail   then press Enter");
+  lcd.setCursor(0, 1);
+  lcd.print(F("Monitor now"));
+
+  Serial.println();
+  Serial.println(
+    F("------------------------------")
+  );
+
+  Serial.println(
+    F("NEW STUDENT REGISTRATION")
+  );
+
+  Serial.println(
+    F("Enter:")
+  );
+
+  Serial.println(
+    F("Name,AdmissionNo,RollNo,Class,ParentEmail")
+  );
+
+  Serial.println(
+    F("Example:")
+  );
+
+  Serial.println(
+    F("Hubayl,69254,02,12D,parent@gmail.com")
+  );
+
+  Serial.println(
+    F("------------------------------")
+  );
 
   while (!Serial.available()) {
+
     delay(50);
   }
 
-  char inputBuf[60];
-  readSerialLine(inputBuf, sizeof(inputBuf));
+  char inputBuf[75];
 
-  char* namePart  = strtok(inputBuf, ",");
-  char* admPart   = strtok(NULL, ",");
-  char* rollPart  = strtok(NULL, ",");
-  char* classPart = strtok(NULL, ",");
-  char* emailPart = strtok(NULL, ",");
+  readSerialLine(
+    inputBuf,
+    sizeof(inputBuf)
+  );
 
-  if (!namePart || !admPart || !rollPart || !classPart || !emailPart) {
-    Serial.println("ERROR: Wrong format. Enrollment cancelled.");
+  char* namePart =
+    strtok(inputBuf, ",");
+
+  char* admPart =
+    strtok(NULL, ",");
+
+  char* rollPart =
+    strtok(NULL, ",");
+
+  char* classPart =
+    strtok(NULL, ",");
+
+  char* emailPart =
+    strtok(NULL, ",");
+
+  if (
+    !namePart ||
+    !admPart ||
+    !rollPart ||
+    !classPart ||
+    !emailPart
+  ) {
+
+    Serial.println(
+      F("ERROR: Wrong format.")
+    );
+
     lcd.clear();
-    lcd.print("Enroll Failed");
+    lcd.print(F("Enroll Failed"));
+
     delay(1500);
+
+    return;
+  }
+
+  // Check duplicate admission number
+
+  if (
+    findUserByAdmission(admPart) != -1
+  ) {
+
+    Serial.println(
+      F("ERROR: Admission number exists.")
+    );
+
+    lcd.clear();
+    lcd.print(F("Adm No Exists"));
+
+    delay(1800);
+
     return;
   }
 
   User u;
-  memcpy(u.uid, uid, 4);
-  strncpy(u.name, namePart, sizeof(u.name) - 1);
-  u.name[sizeof(u.name) - 1] = '\0';
-  strncpy(u.admissionNo, admPart, sizeof(u.admissionNo) - 1);
-  u.admissionNo[sizeof(u.admissionNo) - 1] = '\0';
-  strncpy(u.rollNo, rollPart, sizeof(u.rollNo) - 1);
-  u.rollNo[sizeof(u.rollNo) - 1] = '\0';
-  strncpy(u.className, classPart, sizeof(u.className) - 1);
-  u.className[sizeof(u.className) - 1] = '\0';
-  strncpy(u.parentEmail, emailPart, sizeof(u.parentEmail) - 1);
-  u.parentEmail[sizeof(u.parentEmail) - 1] = '\0';
 
-  users[userCount] = u;
+  memset(
+    &u,
+    0,
+    sizeof(User)
+  );
+
+  memcpy(
+    u.uid,
+    uid,
+    4
+  );
+
+  strncpy(
+    u.name,
+    namePart,
+    sizeof(u.name) - 1
+  );
+
+  strncpy(
+    u.admissionNo,
+    admPart,
+    sizeof(u.admissionNo) - 1
+  );
+
+  strncpy(
+    u.rollNo,
+    rollPart,
+    sizeof(u.rollNo) - 1
+  );
+
+  strncpy(
+    u.className,
+    classPart,
+    sizeof(u.className) - 1
+  );
+
+  strncpy(
+    u.parentEmail,
+    emailPart,
+    sizeof(u.parentEmail) - 1
+  );
+
+  saveUser(
+    userCount,
+    u
+  );
+
   lastSeen[userCount] = 0;
-  userCount++;
-  saveUserToEEPROM(userCount - 1, u);
 
-  Serial.print("Enrolled: ");
-  Serial.println(u.name);
-  Serial.print("UID saved: ");
+  userCount++;
+
+  EEPROM.update(
+    EEPROM_COUNT_ADDR,
+    userCount
+  );
+
+  // ==================================================
+  // DISPLAY RESULT
+  // ==================================================
+
+  Serial.print(
+    F("Enrolled: ")
+  );
+
+  Serial.println(
+    u.name
+  );
+
+  Serial.print(
+    F("Admission No: ")
+  );
+
+  Serial.println(
+    u.admissionNo
+  );
+
+  Serial.print(
+    F("UID saved: ")
+  );
+
   for (byte i = 0; i < 4; i++) {
-    if (u.uid[i] < 0x10) Serial.print("0");
-    Serial.print(u.uid[i], HEX);
-    Serial.print(" ");
+
+    if (u.uid[i] < 0x10)
+      Serial.print('0');
+
+    Serial.print(
+      u.uid[i],
+      HEX
+    );
+
+    Serial.print(' ');
   }
+
   Serial.println();
 
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Enrolled:");
+  lcd.print(F("Enrolled:"));
+
   lcd.setCursor(0, 1);
   lcd.print(u.name);
+
   delay(2000);
 }
 
+// ======================================================
+// SHOW ATTENDANCE
+// ======================================================
 
-// ---------------------------------------------------
-// LCD display for a valid scan
-// ---------------------------------------------------
+void showAttendance(
+  User &user,
+  DateTime now,
+  bool isLate
+) {
 
-void showAttendance(User &user, DateTime now, bool isLate) {
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Welcome");
+
+  lcd.print(F("Welcome"));
+
   lcd.setCursor(0, 1);
+
   lcd.print(user.name);
+
   delay(1200);
 
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Adm:");
+
+  lcd.print(F("Adm:"));
+
   lcd.print(user.admissionNo);
+
   lcd.setCursor(0, 1);
-  lcd.print("Roll:");
+
+  lcd.print(F("Roll:"));
+
   lcd.print(user.rollNo);
-  lcd.print(" ");
+
+  lcd.print(' ');
+
   lcd.print(user.className);
+
   delay(1200);
 
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(isLate ? "Status: LATE" : "Status: ON TIME");
+
+  if (isLate)
+    lcd.print(F("Status: LATE"));
+  else
+    lcd.print(F("Status: ON TIME"));
+
   lcd.setCursor(0, 1);
-  if (now.hour() < 10) lcd.print("0");
+
+  if (now.hour() < 10)
+    lcd.print('0');
+
   lcd.print(now.hour());
-  lcd.print(":");
-  if (now.minute() < 10) lcd.print("0");
+
+  lcd.print(':');
+
+  if (now.minute() < 10)
+    lcd.print('0');
+
   lcd.print(now.minute());
+
   delay(1500);
 }
 
+// ======================================================
+// SEND ATTENDANCE TO ESP32
+// ======================================================
 
-// ---------------------------------------------------
-// Setup
-// ---------------------------------------------------
+void sendAttendanceToESP32(
+  User &user,
+  byte* uid,
+  DateTime now,
+  bool isLate
+) {
+
+  // Name
+  espSerial.print(user.name);
+  espSerial.print(',');
+
+  // Admission
+  espSerial.print(user.admissionNo);
+  espSerial.print(',');
+
+  // Roll
+  espSerial.print(user.rollNo);
+  espSerial.print(',');
+
+  // Class
+  espSerial.print(user.className);
+  espSerial.print(',');
+
+  // Parent Email
+  espSerial.print(user.parentEmail);
+  espSerial.print(',');
+
+  // UID
+  for (byte i = 0; i < 4; i++) {
+
+    if (uid[i] < 0x10)
+      espSerial.print('0');
+
+    espSerial.print(
+      uid[i],
+      HEX
+    );
+  }
+
+  espSerial.print(',');
+
+  // Date
+
+  if (now.day() < 10)
+    espSerial.print('0');
+
+  espSerial.print(now.day());
+
+  espSerial.print('/');
+
+  if (now.month() < 10)
+    espSerial.print('0');
+
+  espSerial.print(now.month());
+
+  espSerial.print('/');
+
+  espSerial.print(now.year());
+
+  espSerial.print(',');
+
+  // Time
+
+  if (now.hour() < 10)
+    espSerial.print('0');
+
+  espSerial.print(now.hour());
+
+  espSerial.print(':');
+
+  if (now.minute() < 10)
+    espSerial.print('0');
+
+  espSerial.print(now.minute());
+
+  espSerial.print(':');
+
+  if (now.second() < 10)
+    espSerial.print('0');
+
+  espSerial.print(now.second());
+
+  espSerial.print(',');
+
+  // Status
+
+  if (isLate)
+    espSerial.println(
+      F("LATE")
+    );
+  else
+    espSerial.println(
+      F("ON TIME")
+    );
+}
+
+// ======================================================
+// SETUP
+// ======================================================
 
 void setup() {
+
   Serial.begin(9600);
+
   espSerial.begin(9600);
 
+  // RFID
   SPI.begin();
+
   mfrc522.PCD_Init();
 
+  // RTC
   Wire.begin();
-  lcd.begin(16, 2);
+
+  // LCD
+  lcd.begin(
+    16,
+    2
+  );
+
   lcd.clear();
-  lcd.print("Starting...");
+
+  lcd.print(
+    F("Starting...")
+  );
+
   delay(1000);
 
+  // ==================================================
+  // RTC CHECK
+  // ==================================================
+
   if (!rtc.begin()) {
+
     lcd.clear();
-    lcd.print("RTC ERROR!");
-    Serial.println("ERROR: DS1307 not found.");
+
+    lcd.print(
+      F("RTC ERROR!")
+    );
+
+    Serial.println(
+      F("ERROR: DS1307 not found.")
+    );
+
     while (1);
   }
 
   if (!rtc.isrunning()) {
+
     lcd.clear();
-    lcd.print("RTC NOT RUNNING");
-    Serial.println("WARNING: RTC is not running.");
+
+    lcd.print(
+      F("RTC NOT RUNNING")
+    );
+
+    Serial.println(
+      F("WARNING: RTC is not running.")
+    );
+
     delay(2000);
   }
 
-  pinMode(GREEN_LED, OUTPUT);
-  pinMode(RED_LED, OUTPUT);
-  pinMode(BUZZER, OUTPUT);
-  digitalWrite(GREEN_LED, LOW);
-  digitalWrite(RED_LED, LOW);
-  digitalWrite(BUZZER, LOW);
+  // ==================================================
+  // OUTPUTS
+  // ==================================================
 
-  loadUsersFromEEPROM();
-  Serial.print("Loaded ");
-  Serial.print(userCount);
-  Serial.println(" users from EEPROM.");
+  pinMode(
+    GREEN_LED,
+    OUTPUT
+  );
 
-  // Optional full reset window
-  Serial.println("Type RESET within 10 seconds to erase all stored users.");
-  unsigned long resetWindowStart = millis();
-  while (millis() - resetWindowStart < 10000) {
+  pinMode(
+    RED_LED,
+    OUTPUT
+  );
+
+  pinMode(
+    BUZZER,
+    OUTPUT
+  );
+
+  digitalWrite(
+    GREEN_LED,
+    LOW
+  );
+
+  digitalWrite(
+    RED_LED,
+    LOW
+  );
+
+  digitalWrite(
+    BUZZER,
+    LOW
+  );
+
+  // ==================================================
+  // EEPROM
+  // ==================================================
+
+  byte storedVersion =
+    EEPROM.read(
+      EEPROM_VERSION_ADDR
+    );
+
+  if (
+    storedVersion !=
+    EEPROM_LAYOUT_VERSION
+  ) {
+
+    userCount = 0;
+
+    EEPROM.update(
+      EEPROM_VERSION_ADDR,
+      EEPROM_LAYOUT_VERSION
+    );
+
+    EEPROM.update(
+      EEPROM_COUNT_ADDR,
+      0
+    );
+
+    Serial.println(
+      F("EEPROM layout reset.")
+    );
+
+  } else {
+
+    userCount =
+      EEPROM.read(
+        EEPROM_COUNT_ADDR
+      );
+
+    if (userCount > MAX_USERS) {
+
+      userCount = 0;
+
+      EEPROM.update(
+        EEPROM_COUNT_ADDR,
+        0
+      );
+    }
+  }
+
+  for (
+    byte i = 0;
+    i < MAX_USERS;
+    i++
+  ) {
+
+    lastSeen[i] = 0;
+  }
+
+  Serial.print(
+    F("Loaded ")
+  );
+
+  Serial.print(
+    userCount
+  );
+
+  Serial.println(
+    F(" users from EEPROM.")
+  );
+
+  // ==================================================
+  // RESET WINDOW
+  // ==================================================
+
+  Serial.println(
+    F("Type RESET within 10 seconds to erase all users.")
+  );
+
+  unsigned long resetWindowStart =
+    millis();
+
+  while (
+    millis() - resetWindowStart <
+    10000UL
+  ) {
+
     if (Serial.available()) {
+
       char cmdBuf[8];
-      readSerialLine(cmdBuf, sizeof(cmdBuf));
-      if (strcasecmp(cmdBuf, "RESET") == 0) {
+
+      readSerialLine(
+        cmdBuf,
+        sizeof(cmdBuf)
+      );
+
+      if (
+        strcasecmp(
+          cmdBuf,
+          "RESET"
+        ) == 0
+      ) {
+
         userCount = 0;
-        EEPROM.write(EEPROM_VERSION_ADDR, EEPROM_LAYOUT_VERSION);
-        EEPROM.write(EEPROM_COUNT_ADDR, 0);
-        Serial.println("All users erased.");
+
+        EEPROM.update(
+          EEPROM_VERSION_ADDR,
+          EEPROM_LAYOUT_VERSION
+        );
+
+        EEPROM.update(
+          EEPROM_COUNT_ADDR,
+          0
+        );
+
+        Serial.println(
+          F("All users erased.")
+        );
+
         lcd.clear();
-        lcd.print("All users wiped");
+
+        lcd.print(
+          F("All users wiped")
+        );
+
         delay(1500);
       }
+
       break;
     }
   }
 
+  // ==================================================
+  // READY
+  // ==================================================
+
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Attendance");
-  lcd.setCursor(0, 1);
-  lcd.print("System Ready");
+
+  lcd.print(
+    F("Attendance")
+  );
+
+  lcd.setCursor(
+    0,
+    1
+  );
+
+  lcd.print(
+    F("System Ready")
+  );
+
   delay(1500);
 
   lcd.clear();
-  lcd.print("Scan your card");
+
+  lcd.print(
+    F("Scan your card")
+  );
 }
 
-
-// ---------------------------------------------------
-// Main loop
-// ---------------------------------------------------
+// ======================================================
+// LOOP
+// ======================================================
 
 void loop() {
-  if (!mfrc522.PICC_IsNewCardPresent()) return;
-  if (!mfrc522.PICC_ReadCardSerial()) return;
 
-  if (mfrc522.uid.size != 4) {
+  // --------------------------------------------------
+  // Wait for RFID card
+  // --------------------------------------------------
+
+  if (
+    !mfrc522.PICC_IsNewCardPresent()
+  )
+    return;
+
+  if (
+    !mfrc522.PICC_ReadCardSerial()
+  )
+    return;
+
+  // --------------------------------------------------
+  // Only 4-byte UID supported
+  // --------------------------------------------------
+
+  if (
+    mfrc522.uid.size != 4
+  ) {
+
     lcd.clear();
-    lcd.print("Unsupported card");
-    digitalWrite(RED_LED, HIGH);
-    tone(BUZZER, 300, 400);
+
+    lcd.print(
+      F("Unsupported card")
+    );
+
+    digitalWrite(
+      RED_LED,
+      HIGH
+    );
+
+    tone(
+      BUZZER,
+      300,
+      400
+    );
+
     delay(1200);
-    digitalWrite(RED_LED, LOW);
+
+    digitalWrite(
+      RED_LED,
+      LOW
+    );
+
     lcd.clear();
-    lcd.print("Scan your card");
+
+    lcd.print(
+      F("Scan your card")
+    );
+
     mfrc522.PICC_HaltA();
+
     return;
   }
 
-  // ---- Master Card menu ----
-  if (sameUID(mfrc522.uid.uidByte, MASTER_UID)) {
+  // ==================================================
+  // MASTER CARD
+  // ==================================================
+
+  if (
+    sameUID(
+      mfrc522.uid.uidByte,
+      MASTER_UID
+    )
+  ) {
+
     lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("MASTER CARD");
-    lcd.setCursor(0, 1);
-    lcd.print("Check Serial");
-    tone(BUZZER, 800, 150);
+
+    lcd.print(
+      F("MASTER CARD")
+    );
+
+    lcd.setCursor(
+      0,
+      1
+    );
+
+    lcd.print(
+      F("Check Serial")
+    );
+
+    tone(
+      BUZZER,
+      800,
+      150
+    );
+
     mfrc522.PICC_HaltA();
+
     mfrc522.PCD_Init();
+
     delay(100);
 
-    Serial.println("Type A to Add or D to Delete, then press Enter");
+    Serial.println(
+      F("Type A to Add or D to Delete, then Enter")
+    );
 
-    unsigned long waitStart = millis();
+    unsigned long waitStart =
+      millis();
+
     while (!Serial.available()) {
-      if (millis() - waitStart > 15000) {
+
+      if (
+        millis() - waitStart >
+        15000UL
+      ) {
+
         lcd.clear();
-        lcd.print("Timeout");
+
+        lcd.print(
+          F("Timeout")
+        );
+
         delay(1200);
+
         lcd.clear();
-        lcd.print("Scan your card");
+
+        lcd.print(
+          F("Scan your card")
+        );
+
         return;
       }
+
       delay(50);
     }
 
-    char choiceBuf[8];
-    readSerialLine(choiceBuf, sizeof(choiceBuf));
-    char choice = toupper(choiceBuf[0]);
+    char choiceBuf[5];
+
+    readSerialLine(
+      choiceBuf,
+      sizeof(choiceBuf)
+    );
+
+    char choice =
+      toupper(
+        choiceBuf[0]
+      );
+
+    // =================================================
+    // ADD USER
+    // =================================================
 
     if (choice == 'A') {
+
       lcd.clear();
-      lcd.print("Tap new card...");
+
+      lcd.print(
+        F("Tap new card...")
+      );
+
       mfrc522.PCD_Init();
+
       delay(100);
 
-      waitStart = millis();
-      while (true) {
-        if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
-          byte newUID[4];
-          memcpy(newUID, mfrc522.uid.uidByte, 4);
-          enrollNewUser(newUID);
-          mfrc522.PICC_HaltA();
-          mfrc522.PCD_Init();
-          delay(100);
-          break;
-        }
-        if (millis() - waitStart > 15000) {
-          lcd.clear();
-          lcd.print("Enroll Timeout");
-          delay(1200);
-          break;
-        }
-      }
+      waitStart =
+        millis();
 
-    } else if (choice == 'D') {
-      lcd.clear();
-      lcd.print("Tap card to del");
-      mfrc522.PCD_Init();
-      delay(100);
-
-      waitStart = millis();
       while (true) {
-        if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
-          int idx = findUser(mfrc522.uid.uidByte);
-          if (idx == -1) {
+
+        if (
+          mfrc522.PICC_IsNewCardPresent() &&
+          mfrc522.PICC_ReadCardSerial()
+        ) {
+
+          if (
+            mfrc522.uid.size != 4
+          ) {
+
             lcd.clear();
-            lcd.print("Not Found");
-            Serial.println("That card isn't registered.");
-          } else {
-            char removedName[13];
-            strncpy(removedName, users[idx].name, sizeof(removedName));
-            deleteUser(idx);
-            lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("Deleted:");
-            lcd.setCursor(0, 1);
-            lcd.print(removedName);
-            Serial.print("Deleted: ");
-            Serial.println(removedName);
+
+            lcd.print(
+              F("Unsupported")
+            );
+
+            delay(1200);
+
+            break;
           }
-          delay(1500);
+
+          byte newUID[4];
+
+          memcpy(
+            newUID,
+            mfrc522.uid.uidByte,
+            4
+          );
+
+          enrollNewUser(
+            newUID
+          );
+
           mfrc522.PICC_HaltA();
+
           mfrc522.PCD_Init();
+
           delay(100);
+
           break;
         }
-        if (millis() - waitStart > 15000) {
+
+        if (
+          millis() - waitStart >
+          15000UL
+        ) {
+
           lcd.clear();
-          lcd.print("Delete Timeout");
+
+          lcd.print(
+            F("Enroll Timeout")
+          );
+
           delay(1200);
+
           break;
         }
       }
+    }
 
-    } else {
+    // =================================================
+    // DELETE USER
+    // =================================================
+
+    else if (choice == 'D') {
+
       lcd.clear();
-      lcd.print("Unknown choice");
+
+      lcd.print(
+        F("Tap card to del")
+      );
+
+      mfrc522.PCD_Init();
+
+      delay(100);
+
+      waitStart =
+        millis();
+
+      while (true) {
+
+        if (
+          mfrc522.PICC_IsNewCardPresent() &&
+          mfrc522.PICC_ReadCardSerial()
+        ) {
+
+          int idx =
+            findUser(
+              mfrc522.uid.uidByte
+            );
+
+          if (idx == -1) {
+
+            lcd.clear();
+
+            lcd.print(
+              F("Not Found")
+            );
+
+            Serial.println(
+              F("Card isn't registered.")
+            );
+
+          } else {
+
+            loadUser(idx);
+
+            char removedName[13];
+
+            strncpy(
+              removedName,
+              currentUser.name,
+              sizeof(removedName)
+            );
+
+            removedName[
+              sizeof(removedName) - 1
+            ] = '\0';
+
+            deleteUser(idx);
+
+            lcd.clear();
+
+            lcd.print(
+              F("Deleted:")
+            );
+
+            lcd.setCursor(
+              0,
+              1
+            );
+
+            lcd.print(
+              removedName
+            );
+
+            Serial.print(
+              F("Deleted: ")
+            );
+
+            Serial.println(
+              removedName
+            );
+          }
+
+          delay(1500);
+
+          mfrc522.PICC_HaltA();
+
+          mfrc522.PCD_Init();
+
+          delay(100);
+
+          break;
+        }
+
+        if (
+          millis() - waitStart >
+          15000UL
+        ) {
+
+          lcd.clear();
+
+          lcd.print(
+            F("Delete Timeout")
+          );
+
+          delay(1200);
+
+          break;
+        }
+      }
+    }
+
+    else {
+
+      lcd.clear();
+
+      lcd.print(
+        F("Unknown choice")
+      );
+
       delay(1200);
     }
 
     lcd.clear();
-    lcd.print("Scan your card");
+
+    lcd.print(
+      F("Scan your card")
+    );
+
     return;
   }
 
-  // ---- Normal attendance scan ----
-  int matchIndex = findUser(mfrc522.uid.uidByte);
+  // ==================================================
+  // NORMAL USER
+  // ==================================================
+
+  int matchIndex =
+    findUser(
+      mfrc522.uid.uidByte
+    );
+
+  // --------------------------------------------------
+  // Not registered
+  // --------------------------------------------------
 
   if (matchIndex == -1) {
-    Serial.print("UID scanned: ");
+
+    Serial.print(
+      F("UID scanned: ")
+    );
+
     for (byte i = 0; i < 4; i++) {
-      if (mfrc522.uid.uidByte[i] < 0x10) Serial.print("0");
-      Serial.print(mfrc522.uid.uidByte[i], HEX);
-      Serial.print(" ");
+
+      if (
+        mfrc522.uid.uidByte[i] <
+        0x10
+      )
+        Serial.print('0');
+
+      Serial.print(
+        mfrc522.uid.uidByte[i],
+        HEX
+      );
+
+      Serial.print(' ');
     }
+
     Serial.println();
 
     lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Not Registered");
-    lcd.setCursor(0, 1);
-    lcd.print("Access Denied");
-    digitalWrite(RED_LED, HIGH);
-    tone(BUZZER, 300, 500);
+
+    lcd.print(
+      F("Not Registered")
+    );
+
+    lcd.setCursor(
+      0,
+      1
+    );
+
+    lcd.print(
+      F("Access Denied")
+    );
+
+    digitalWrite(
+      RED_LED,
+      HIGH
+    );
+
+    tone(
+      BUZZER,
+      300,
+      500
+    );
+
     delay(1200);
-    digitalWrite(RED_LED, LOW);
 
-  } else {
-    unsigned long currentMillis = millis();
+    digitalWrite(
+      RED_LED,
+      LOW
+    );
+  }
 
-    if (lastSeen[matchIndex] != 0 && currentMillis - lastSeen[matchIndex] < COOLDOWN_MS) {
+  // --------------------------------------------------
+  // Registered user
+  // --------------------------------------------------
+
+  else {
+
+    unsigned long currentMillis =
+      millis();
+
+    loadUser(
+      matchIndex
+    );
+
+    // Cooldown
+
+    if (
+      lastSeen[matchIndex] != 0 &&
+      currentMillis -
+      lastSeen[matchIndex] <
+      COOLDOWN_MS
+    ) {
+
       lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print(users[matchIndex].name);
-      lcd.setCursor(0, 1);
-      lcd.print("Already Marked");
-      digitalWrite(RED_LED, HIGH);
-      tone(BUZZER, 300, 200);
+
+      lcd.print(
+        currentUser.name
+      );
+
+      lcd.setCursor(
+        0,
+        1
+      );
+
+      lcd.print(
+        F("Already Marked")
+      );
+
+      digitalWrite(
+        RED_LED,
+        HIGH
+      );
+
+      tone(
+        BUZZER,
+        300,
+        200
+      );
+
       delay(1200);
-      digitalWrite(RED_LED, LOW);
 
-    } else {
-      lastSeen[matchIndex] = currentMillis;
+      digitalWrite(
+        RED_LED,
+        LOW
+      );
+    }
 
-      DateTime now = rtc.now();
-      bool isLate = (now.hour() > LATE_HOUR) ||
-                    (now.hour() == LATE_HOUR && now.minute() > LATE_MINUTE);
+    // ------------------------------------------------
+    // Mark attendance immediately
+    // ------------------------------------------------
 
-      digitalWrite(GREEN_LED, HIGH);
-      tone(BUZZER, 1000, 200);
+    else {
 
-      showAttendance(users[matchIndex], now, isLate);
+      lastSeen[matchIndex] =
+        currentMillis;
 
-      // CSV line over Serial
-      Serial.print(users[matchIndex].name);        Serial.print(",");
-      Serial.print(users[matchIndex].admissionNo);  Serial.print(",");
-      Serial.print(users[matchIndex].rollNo);       Serial.print(",");
-      Serial.print(users[matchIndex].className);    Serial.print(",");
-      Serial.print(users[matchIndex].parentEmail);  Serial.print(",");
+      DateTime now =
+        rtc.now();
+
+      bool isLate =
+        (
+          now.hour() > LATE_HOUR
+        ) ||
+        (
+          now.hour() == LATE_HOUR &&
+          now.minute() >= LATE_MINUTE
+        );
+
+      // Green LED
+      digitalWrite(
+        GREEN_LED,
+        HIGH
+      );
+
+      // Buzzer
+      tone(
+        BUZZER,
+        1000,
+        200
+      );
+
+      // LCD
+      showAttendance(
+        currentUser,
+        now,
+        isLate
+      );
+
+      // USB serial log
+
+      Serial.print(
+        currentUser.name
+      );
+
+      Serial.print(',');
+
+      Serial.print(
+        currentUser.admissionNo
+      );
+
+      Serial.print(',');
+
+      Serial.print(
+        currentUser.rollNo
+      );
+
+      Serial.print(',');
+
+      Serial.print(
+        currentUser.className
+      );
+
+      Serial.print(',');
+
+      Serial.print(
+        currentUser.parentEmail
+      );
+
+      Serial.print(',');
 
       for (byte i = 0; i < 4; i++) {
-        if (mfrc522.uid.uidByte[i] < 0x10) Serial.print("0");
-        Serial.print(mfrc522.uid.uidByte[i], HEX);
+
+        if (
+          mfrc522.uid.uidByte[i] <
+          0x10
+        )
+          Serial.print('0');
+
+        Serial.print(
+          mfrc522.uid.uidByte[i],
+          HEX
+        );
       }
-      Serial.print(",");
 
-      if (now.day() < 10) Serial.print("0");
-      Serial.print(now.day()); Serial.print("/");
-      if (now.month() < 10) Serial.print("0");
-      Serial.print(now.month()); Serial.print("/");
-      Serial.print(now.year());
-      Serial.print(",");
+      Serial.print(',');
 
-      if (now.hour() < 10) Serial.print("0");
-      Serial.print(now.hour()); Serial.print(":");
-      if (now.minute() < 10) Serial.print("0");
-      Serial.print(now.minute()); Serial.print(":");
-      if (now.second() < 10) Serial.print("0");
-      Serial.print(now.second());
-      Serial.print(",");
+      // Date
 
-      Serial.println(isLate ? "LATE" : "ON TIME");
+      if (now.day() < 10)
+        Serial.print('0');
 
-      // Same record, sent to the ESP32 for WiFi upload
-      espSerial.print(users[matchIndex].name);        espSerial.print(",");
-      espSerial.print(users[matchIndex].admissionNo);  espSerial.print(",");
-      espSerial.print(users[matchIndex].rollNo);       espSerial.print(",");
-      espSerial.print(users[matchIndex].className);    espSerial.print(",");
-      espSerial.print(users[matchIndex].parentEmail);  espSerial.print(",");
+      Serial.print(
+        now.day()
+      );
 
-      for (byte i = 0; i < 4; i++) {
-        if (mfrc522.uid.uidByte[i] < 0x10) espSerial.print("0");
-        espSerial.print(mfrc522.uid.uidByte[i], HEX);
-      }
-      espSerial.print(",");
+      Serial.print('/');
 
-      if (now.day() < 10) espSerial.print("0");
-      espSerial.print(now.day()); espSerial.print("/");
-      if (now.month() < 10) espSerial.print("0");
-      espSerial.print(now.month()); espSerial.print("/");
-      espSerial.print(now.year());
-      espSerial.print(",");
+      if (now.month() < 10)
+        Serial.print('0');
 
-      if (now.hour() < 10) espSerial.print("0");
-      espSerial.print(now.hour()); espSerial.print(":");
-      if (now.minute() < 10) espSerial.print("0");
-      espSerial.print(now.minute()); espSerial.print(":");
-      if (now.second() < 10) espSerial.print("0");
-      espSerial.print(now.second());
-      espSerial.print(",");
+      Serial.print(
+        now.month()
+      );
 
-      espSerial.println(isLate ? "LATE" : "ON TIME");
+      Serial.print('/');
 
-      digitalWrite(GREEN_LED, LOW);
+      Serial.print(
+        now.year()
+      );
+
+      Serial.print(',');
+
+      // Time
+
+      if (now.hour() < 10)
+        Serial.print('0');
+
+      Serial.print(
+        now.hour()
+      );
+
+      Serial.print(':');
+
+      if (now.minute() < 10)
+        Serial.print('0');
+
+      Serial.print(
+        now.minute()
+      );
+
+      Serial.print(':');
+
+      if (now.second() < 10)
+        Serial.print('0');
+
+      Serial.print(
+        now.second()
+      );
+
+      Serial.print(',');
+
+      // Status
+
+      if (isLate)
+        Serial.println(
+          F("LATE")
+        );
+      else
+        Serial.println(
+          F("ON TIME")
+        );
+
+      // Send to ESP32
+
+      sendAttendanceToESP32(
+        currentUser,
+        mfrc522.uid.uidByte,
+        now,
+        isLate
+      );
+
+      digitalWrite(
+        GREEN_LED,
+        LOW
+      );
     }
   }
 
+  // ==================================================
+  // RESET RFID
+  // ==================================================
+
   lcd.clear();
-  lcd.print("Scan your card");
+
+  lcd.print(
+    F("Scan your card")
+  );
 
   mfrc522.PICC_HaltA();
+
   mfrc522.PCD_Init();
 
   delay(300);
