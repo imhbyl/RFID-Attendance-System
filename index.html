@@ -620,6 +620,12 @@
     ========================= -->
 
     <div class="hero">
+      <div id="debugCount" style="
+                margin-top:8px;
+                font-size:13px;
+                color:#666;">
+            Loaded: 0 records
+      </div>
 
       <div class="stat-card">
 
@@ -1101,16 +1107,14 @@ async function loadGoogleSheet() {
     }
 
 
-    allRows =
-      normalizeRows(
-        result.data
-      );
+    console.log("RAW CSV rows:", result.data.length);
 
+    allRows = normalizeRows(result.data);
 
-    console.log(
-      "Google Sheet records:",
-      allRows.length
-    );
+    console.log("NORMALIZED rows:", allRows.length);
+
+    byId("debugCount").textContent =
+       "Loaded: " + allRows.length + " records";
 
 
     if (
@@ -1162,74 +1166,26 @@ async function loadGoogleSheet() {
 ===================================================== */
 
 function normalizeRows(rows) {
-
   return rows
-    .map(
-      function (row) {
-
-        return {
-          Name:
-            String(
-              row.Name ?? ""
-            ).trim(),
-
-          AdmissionNo:
-            String(
-              row.AdmissionNo ?? ""
-            ).trim(),
-
-          RollNo:
-            String(
-              row.RollNo ?? ""
-            ).trim(),
-
-          Class:
-            String(
-              row.Class ?? ""
-            ).trim(),
-
-          ParentEmail:
-            String(
-              row.ParentEmail ?? ""
-            ).trim(),
-
-          UID:
-            String(
-              row.UID ?? ""
-            ).trim(),
-
-          Date:
-            String(
-              row.Date ?? ""
-            ).trim(),
-
-          Time:
-            String(
-              row.Time ?? ""
-            ).trim(),
-
-          Status:
-            String(
-              row.Status ?? ""
-            ).trim().toUpperCase()
-
-        };
-
-      }
-    )
-    .filter(
-      function (row) {
-
-        return (
-          row.Name !== "" &&
-          row.Date !== ""
-        );
-
-      }
-    );
-
+    .map(function(row) {
+      return {
+        Name: String(row.Name ?? "").trim(),
+        AdmissionNo: String(row.AdmissionNo ?? "").trim(),
+        RollNo: String(row.RollNo ?? "").trim(),
+        Class: String(row.Class ?? "").trim(),
+        ParentEmail: String(row.ParentEmail ?? "").trim(),
+        UID: String(row.UID ?? "").trim(),
+        Date: String(row.Date ?? "").trim(),
+        Time: String(row.Time ?? "").trim(),
+        Status: String(row.Status ?? "").trim().toUpperCase()
+      };
+    })
+    .filter(function(row) {
+      return Object.values(row).some(function(value) {
+        return value !== "";
+      });
+    });
 }
-
 
 /* =====================================================
    SHOW DASHBOARD
